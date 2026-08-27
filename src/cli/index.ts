@@ -6,6 +6,7 @@ import { validate } from './commands/validate.js';
 import { plan } from './commands/plan.js';
 import { apply } from './commands/apply.js';
 import { publish } from './commands/publish.js';
+import { rollback } from './commands/rollback.js';
 import type { GlobalOptions } from './options.js';
 
 // package.json is the only place the version is written down; `npm version` bumps it there.
@@ -60,6 +61,14 @@ program
   .description('create a GTM container version from the current workspace and publish it')
   .action(async function (this: Command) {
     await publish(globalOptions(this));
+  });
+
+program
+  .command('rollback')
+  .description('republish the container version that was live before the current one')
+  .option('--auto-approve', 'skip the confirmation prompt', false)
+  .action(async function (this: Command) {
+    await rollback(globalOptions(this));
   });
 
 await program.parseAsync();

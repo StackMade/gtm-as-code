@@ -53,9 +53,6 @@ description of what the product measures, and that has uses beyond `apply`.
 The gate for using this in CI at all. Nothing here is a new feature; all of it closes a way the
 current tool can be wrong.
 
-- `gtm-code rollback`. GTM stores container versions natively, so republishing the previous one is
-  close to free once versioning exists. "The site's analytics broke, put back the last known good"
-  is the single most valuable operational command for a tool that writes to live containers.
 - `--allow-destroy`. Deletes currently only need `--auto-approve`, which is the same flag CI uses
   for routine applies. Destructive changes need their own opt-in. The flag's semantics differ per
   provider: GTM deletes are permanent, while GA4 custom dimensions and metrics can only be archived,

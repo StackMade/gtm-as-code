@@ -111,6 +111,30 @@ test('hasSyncConflicts is false when the sync reports no conflicts', async () =>
   assert.equal(await client.hasSyncConflicts(), false);
 });
 
+test('listVersions returns the containerVersionHeader list', async () => {
+  const auth = { request: async () => ({ data: { containerVersionHeader: [{ containerVersionId: '3' }, { containerVersionId: '2' }] } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  assert.deepEqual(await client.listVersions(), [{ containerVersionId: '3' }, { containerVersionId: '2' }]);
+});
+
+test('liveVersion returns null on a NOT_FOUND response', async () => {
+  const auth = { request: async () => Promise.reject({ response: { data: { error: { status: 'NOT_FOUND' } } } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  assert.equal(await client.liveVersion(), null);
+});
+
+test('liveVersion returns the live version data', async () => {
+  const auth = { request: async () => ({ data: { containerVersionId: '5', name: 'v5' } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  assert.deepEqual(await client.liveVersion(), { containerVersionId: '5', name: 'v5' });
+});
+
 test('listManaged sees resources that only appear on a later page', async () => {
   const auth = pagingAuth([
     { trigger: [{ triggerId: '1', notes: 'unmanaged' }], nextPageToken: 'page-2' },

@@ -184,4 +184,31 @@ export class GtmClient {
       throw new GtmApiError('publish version', containerVersionId, extractApiStatus(error), { cause: error });
     }
   }
+
+  /** All container versions, in the order the API returns them. */
+  async listVersions(): Promise<GtmVersionRef[]> {
+    const { accountId, containerId } = this.ref;
+    try {
+      const response = await this.auth.request<{ containerVersionHeader?: GtmVersionRef[] }>({
+        url: `${BASE_URL}/accounts/${accountId}/containers/${containerId}/versions`,
+      });
+      return response.data.containerVersionHeader ?? [];
+    } catch (error) {
+      throw new GtmApiError('list versions for', containerId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  /** The container's currently published version, or `null` if nothing has ever been published. */
+  async liveVersion(): Promise<GtmVersionRef | null> {
+    const { accountId, containerId } = this.ref;
+    try {
+      const response = await this.auth.request<GtmVersionRef>({
+        url: `${BASE_URL}/accounts/${accountId}/containers/${containerId}/versions/live`,
+      });
+      return response.data;
+    } catch (error) {
+      if (extractApiStatus(error) === 'NOT_FOUND') return null;
+      throw new GtmApiError('resolve the live version for', containerId, extractApiStatus(error), { cause: error });
+    }
+  }
 }

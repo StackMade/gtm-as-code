@@ -252,6 +252,13 @@ notes are taken from the current commit (short SHA and subject line) when run in
 checkout, so the GTM version history stays readable against your commit history. Requires the
 `tagmanager.publish` scope in addition to the ones `apply` already needs.
 
+### `gtm-code rollback [--auto-approve]`
+
+Republishes the container version that was live immediately before the current one. Prints both
+versions and prompts `Continue? [y/N]` unless `--auto-approve` is passed. Does nothing to the
+workspace or to `.analytics/state.json`; it only changes which already-existing version is live, so
+it's close to free to run once `publish` has created a version history to roll back through.
+
 ## State
 
 `.analytics/state.json` is created and updated automatically by `plan` and `apply`. It tracks which

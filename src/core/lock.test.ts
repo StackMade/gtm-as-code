@@ -46,7 +46,7 @@ test('withStateLock refuses to run fn while another lock is held', async () => {
     });
 
     const first = withStateLock(statePath, () => held);
-    await new Promise((resolve) => setImmediate(resolve));
+    await waitForFile(`${statePath}.lock`);
 
     await assert.rejects(() => withStateLock(statePath, async () => 'should not run'), StateLockedError);
 
@@ -56,3 +56,15 @@ test('withStateLock refuses to run fn while another lock is held', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+/** `withStateLock` acquires the lock via real filesystem I/O, so a caller needs to wait for it rather than assume one event-loop tick is enough. */
+async function waitForFile(path: string): Promise<void> {
+  for (;;) {
+    try {
+      await stat(path);
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+}

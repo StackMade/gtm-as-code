@@ -1,5 +1,5 @@
-import { createInterface } from 'node:readline/promises';
 import { computePlan, type PlanResult } from './plan.js';
+import { confirm } from '../confirm.js';
 import { buildDependencyGraph } from '../../core/graph.js';
 import { writeState, recordManaged, forgetManaged, readState } from '../../core/state.js';
 import { withStateLock } from '../../core/lock.js';
@@ -60,15 +60,6 @@ function printDestructiveWarnings(changes: Change[]): void {
   }
 }
 
-async function confirm(): Promise<boolean> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const answer = await rl.question('Continue? [y/N] ');
-    return answer.trim().toLowerCase() === 'y';
-  } finally {
-    rl.close();
-  }
-}
 
 async function execute(result: PlanResult): Promise<void> {
   const { changes, config, compiled, gtm, ga4, statePath } = result;
