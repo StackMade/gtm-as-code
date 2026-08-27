@@ -412,6 +412,17 @@ tags don't share a namespace with this package's npm releases.
 
 See [ROADMAP.md](./ROADMAP.md) for what's planned and in what order.
 
+## Releasing
+
+Versions come from [Changesets](https://github.com/changesets/changesets), not from editing
+`package.json` by hand. If a pull request changes something a user of the package would notice,
+run `npx changeset`, pick the bump level, write a line of summary, and commit the generated file
+in `.changeset/` alongside the code. Docs, CI and internal refactors don't need one.
+
+Merging to `main` opens a pull request titled "Release" that carries the version bump and the
+`CHANGELOG.md` entries. Merging that pull request publishes to npm with provenance, pushes the
+`v*` tag and creates the GitHub release.
+
 ## License
 
 MIT, see [LICENSE](./LICENSE).

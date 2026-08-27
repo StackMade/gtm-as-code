@@ -1,18 +1,43 @@
 name: Release
 
+# Changesets owns the version number. Merging to main opens (or updates) a "Release" pull
+# request carrying the bump and the changelog; merging that pull request is what publishes.
 on:
   push:
-    tags: ['v*']
-
-permissions:
-  contents: read
-  # Lets the runner mint the OIDC token npm exchanges for publish rights, so no
-  # npm token is stored in this repository. Also what gives the release its provenance.
-  id-token: write
+    branches: [main]
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # Changesets compares against the base branch, so it needs the full history.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: changesets/action/version@v2
+        with:
+          pr-title: 'Release'
+
   publish:
     runs-on: ubuntu-latest
+    needs: version
+    permissions:
+      # Lets the runner push the v* tag and create the GitHub release.
+      contents: write
+      # Lets the runner mint the OIDC token npm exchanges for publish rights, so no
+      # npm token is stored in this repository. Also what gives the release its provenance.
+      #
+      # The trusted publisher on npm is bound to this workflow's path. Renaming this file
+      # breaks every publish until the npm setting is updated to match.
+      id-token: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -24,28 +49,15 @@ jobs:
       # Trusted publishing needs npm >= 11.5.1; Node 24 ships npm 11, this pins the floor.
       - run: npm install -g npm@latest
 
-      - name: Check that the tag matches the version in package.json
-        env:
-          TAG: ${{ github.ref_name }}
-        run: test "v$(node -p "require('./package.json').version")" = "$TAG"
-
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
 
-      # Re-tagging a released version (say, to correct the docs it shipped with) would
-      # otherwise fail this job on a publish npm was always going to reject.
-      - name: Check whether this version is already published
-        id: published
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          if npm view "@stackmade/gtm-as-code@${version}" version >/dev/null 2>&1; then
-            echo "Version ${version} is already on npm; skipping publish." >> "$GITHUB_STEP_SUMMARY"
-            echo "already=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # prepack rebuilds dist/ from a clean checkout. Provenance is attached
-      # automatically under OIDC, so no --provenance flag is needed.
-      - if: steps.published.outputs.already != 'true'
-        run: npm publish --access public
+      # A no-op unless the merge was the Release pull request: changeset publish skips
+      # versions already on the registry. prepack rebuilds dist/ from the clean checkout,
+      # and provenance is attached automatically under OIDC.
+      - uses: changesets/action/publish@v2
+        with:
+          script: npm run release
+          create-github-releases: true
