@@ -241,7 +241,9 @@ a trigger created in the same run, then updates. Prompts `Continue? [y/N]` unles
 is passed.
 
 `apply` only writes to the GTM workspace. Nothing reaches the live container until you run
-`gtm-code publish`.
+`gtm-code publish`. Before writing anything, `apply` also checks whether the workspace has changes
+it can't safely merge, most likely from someone editing the same workspace in the GTM UI, and
+refuses to proceed if it finds any rather than overwriting them.
 
 ### `gtm-code publish`
 
@@ -331,12 +333,6 @@ Use a real credential-loading action, or Workload Identity Federation, to popula
 `GOOGLE_APPLICATION_CREDENTIALS`, and adapt this to whatever your organization already uses.
 `apply` only writes to the GTM workspace; add a `run: npx gtm-code publish` step after it if you
 want every push to `main` to also go live.
-
-One known limitation of running this in CI today, being addressed in 0.2 (see
-[ROADMAP.md](./ROADMAP.md)):
-
-- If someone edits the container through the GTM UI while a workspace is open, `apply` does not yet
-  detect the conflict.
 
 GA4 ownership tracking works in CI as long as `.analytics/state.json` is committed (see
 [State](#state) above), so a fresh checkout already knows which GA4 resources this tool manages.

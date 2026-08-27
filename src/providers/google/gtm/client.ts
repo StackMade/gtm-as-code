@@ -154,6 +154,24 @@ export class GtmClient {
     }
   }
 
+  /**
+   * True if this workspace has diverged from the container in a way GTM can't auto-merge,
+   * typically a human editing the same workspace through the UI. `apply` checks this before
+   * writing so it refuses to proceed rather than silently overwriting those edits.
+   */
+  async hasSyncConflicts(): Promise<boolean> {
+    const { accountId, containerId, workspaceId } = this.ref;
+    try {
+      const response = await this.auth.request<{ mergeConflict?: unknown[]; syncStatus?: { mergeConflict?: boolean } }>({
+        url: `${BASE_URL}/accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}:sync`,
+        method: 'POST',
+      });
+      return Boolean(response.data.syncStatus?.mergeConflict) || Boolean(response.data.mergeConflict?.length);
+    } catch (error) {
+      throw new GtmApiError('sync workspace for', containerId, extractApiStatus(error), { cause: error });
+    }
+  }
+
   /** Publishes an already-created container version, making it live. */
   async publishVersion(containerVersionId: string): Promise<void> {
     const { accountId, containerId } = this.ref;

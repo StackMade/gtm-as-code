@@ -10,6 +10,7 @@ import type { GtmKind } from '../../providers/google/gtm/client.js';
 import { gtmIdField } from '../../providers/google/gtm/client.js';
 import { toGa4Payload } from '../../providers/google/ga4/mapping.js';
 import type { Ga4Kind } from '../../providers/google/ga4/client.js';
+import { WorkspaceConflictError } from '../../providers/google/gtm/errors.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
 
@@ -28,6 +29,8 @@ export async function apply(opts: GlobalOptions & { autoApprove?: boolean }): Pr
       console.log('No changes.');
       return;
     }
+
+    if (await result.gtm.hasSyncConflicts()) throw new WorkspaceConflictError(result.config.google.gtm.containerId);
 
     printDestructiveWarnings(result.changes);
     console.log('Apply these changes?\n');

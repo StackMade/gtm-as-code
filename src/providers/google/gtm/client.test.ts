@@ -87,6 +87,30 @@ test('publishVersion posts to versions/{id}:publish', async () => {
   ]);
 });
 
+test('hasSyncConflicts reads syncStatus.mergeConflict off a :sync response', async () => {
+  const auth = { request: async () => ({ data: { syncStatus: { mergeConflict: true } } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  assert.equal(await client.hasSyncConflicts(), true);
+});
+
+test('hasSyncConflicts also reads a top-level mergeConflict array', async () => {
+  const auth = { request: async () => ({ data: { mergeConflict: [{}] } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  assert.equal(await client.hasSyncConflicts(), true);
+});
+
+test('hasSyncConflicts is false when the sync reports no conflicts', async () => {
+  const auth = { request: async () => ({ data: {} }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  assert.equal(await client.hasSyncConflicts(), false);
+});
+
 test('listManaged sees resources that only appear on a later page', async () => {
   const auth = pagingAuth([
     { trigger: [{ triggerId: '1', notes: 'unmanaged' }], nextPageToken: 'page-2' },

@@ -53,9 +53,6 @@ description of what the product measures, and that has uses beyond `apply`.
 The gate for using this in CI at all. Nothing here is a new feature; all of it closes a way the
 current tool can be wrong.
 
-- Workspace conflict detection. GTM workspaces can diverge when a human edits the container through
-  the UI. The API exposes workspace status and a sync operation, and `apply` should refuse to
-  proceed on an unresolved conflict rather than silently overwriting.
 - `gtm-code rollback`. GTM stores container versions natively, so republishing the previous one is
   close to free once versioning exists. "The site's analytics broke, put back the last known good"
   is the single most valuable operational command for a tool that writes to live containers.

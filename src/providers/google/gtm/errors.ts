@@ -18,6 +18,18 @@ export class GtmApiError extends Error {
   }
 }
 
+/** The GTM workspace has changes `apply` didn't make and GTM can't auto-merge — most likely a human editing it in the UI. */
+export class WorkspaceConflictError extends Error {
+  constructor(containerId: string) {
+    super(
+      `GTM workspace for container "${containerId}" has unresolved changes apply can't safely merge.\n\n` +
+        'Someone may have edited this workspace directly in the GTM UI. Resolve the conflict there ' +
+        '(discard the UI changes, or move them to a different workspace) before running apply again.',
+    );
+    this.name = 'WorkspaceConflictError';
+  }
+}
+
 const REMEDIATION: Record<string, string> = {
   RESOURCE_EXHAUSTED: 'Your GTM container may have reached a resource limit, or the API quota was exceeded.',
   PERMISSION_DENIED: 'The authenticated account needs Edit access on this GTM container.',
