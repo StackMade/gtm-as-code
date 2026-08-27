@@ -8,7 +8,7 @@ import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
 
 /** Republishes the container version that was live immediately before the current one. */
-export async function rollback(opts: GlobalOptions & { autoApprove?: boolean }): Promise<void> {
+export async function rollback(opts: GlobalOptions): Promise<void> {
   try {
     const parsed = loadConfig(opts.config);
     const interpolated = { ...parsed, data: interpolateConfig(parsed) };

@@ -4,4 +4,5 @@ export interface GlobalOptions {
   format: 'text' | 'json' | 'markdown';
   config?: string;
   autoApprove?: boolean;
+  allowDestroy?: boolean;
 }

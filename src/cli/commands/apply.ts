@@ -21,7 +21,7 @@ const GA4_UPDATE_MASK: Record<Ga4Kind, string[]> = {
   keyEvent: [],
 };
 
-export async function apply(opts: GlobalOptions & { autoApprove?: boolean }): Promise<void> {
+export async function apply(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmEdit, SCOPES.ga4Edit]);
 
@@ -31,6 +31,13 @@ export async function apply(opts: GlobalOptions & { autoApprove?: boolean }): Pr
     }
 
     if (await result.gtm.hasSyncConflicts()) throw new WorkspaceConflictError(result.config.google.gtm.containerId);
+
+    if (result.counts.delete > 0 && !opts.allowDestroy) {
+      throw new Error(
+        `This apply would delete ${result.counts.delete} resource${result.counts.delete === 1 ? '' : 's'}. ` +
+          'Pass --allow-destroy to allow apply to include deletes.',
+      );
+    }
 
     printDestructiveWarnings(result.changes);
     console.log('Apply these changes?\n');

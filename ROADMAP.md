@@ -53,10 +53,6 @@ description of what the product measures, and that has uses beyond `apply`.
 The gate for using this in CI at all. Nothing here is a new feature; all of it closes a way the
 current tool can be wrong.
 
-- `--allow-destroy`. Deletes currently only need `--auto-approve`, which is the same flag CI uses
-  for routine applies. Destructive changes need their own opt-in. The flag's semantics differ per
-  provider: GTM deletes are permanent, while GA4 custom dimensions and metrics can only be archived,
-  not hard-deleted, even though `plan` prints them as `- delete`.
 - `--format json` and `--format markdown`. The flag is accepted today and ignored. JSON for machine
   consumption, markdown so a PR bot can post the plan as a comment.
 - Exit codes. Distinct codes for "no changes", "changes pending", and "error", so CI can branch on

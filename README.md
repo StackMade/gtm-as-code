@@ -233,7 +233,7 @@ Parses and schema-checks the config offline. No Google API calls, no credentials
 Authorizes with read-only scopes, diffs your config against the live GTM container and GA4
 property, and prints the result. Never creates, updates, or deletes anything.
 
-### `gtm-code apply [--auto-approve]`
+### `gtm-code apply [--auto-approve] [--allow-destroy]`
 
 Runs the same diff as `plan`, then executes it. Deletes go first (tags, then triggers, then
 variables, the reverse of creation order), then creates in dependency order so a tag can reference
@@ -244,6 +244,13 @@ is passed.
 `gtm-code publish`. Before writing anything, `apply` also checks whether the workspace has changes
 it can't safely merge, most likely from someone editing the same workspace in the GTM UI, and
 refuses to proceed if it finds any rather than overwriting them.
+
+If the plan includes any deletes, `apply` refuses to run unless `--allow-destroy` is also passed,
+even with `--auto-approve`. The two flags are independent on purpose: `--auto-approve` is the flag
+your routine CI apply already uses, and a destructive change deserves its own opt-in rather than
+riding along with it. This applies to GA4 deletes too, even though a GA4 custom dimension or metric
+is archived rather than hard-deleted (key events are hard-deleted); `plan` prints all three as
+`- delete`, so `apply` treats them the same way for this gate.
 
 ### `gtm-code publish`
 
