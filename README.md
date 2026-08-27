@@ -247,8 +247,17 @@ GA4 resources this tool owns. GTM ownership is tracked differently, via a `notes
 writes onto each GTM object it manages. Resources not tracked as managed are never touched or
 deleted.
 
-Don't hand-edit `.analytics/state.json`. Add it, along with your real `analytics/.env.analytics`
-file, to your project's `.gitignore`, and keep only `.env.analytics.example` committed.
+`apply` holds an exclusive lock (`.analytics/state.json.lock`) for the duration of the run. Two
+concurrent `apply`s against the same state file can't interleave writes: the second one fails fast
+with a clear error instead of corrupting the file. If a run crashes without cleaning up, delete the
+leftover `.lock` file before retrying. The state file also carries a `version` field. A version this
+CLI doesn't understand fails `plan`/`apply` loudly instead of silently treating the state as empty.
+
+Don't hand-edit `.analytics/state.json`. **Commit it.** It holds no secrets, only resource ids, and
+it's the only record of which GA4 resources this tool owns. A CI runner that checks out the repo
+needs this file to know what already exists, or every run tries to re-create every GA4 resource.
+Keep your real `analytics/.env.analytics` file gitignored instead, and commit only
+`.env.analytics.example`.
 
 ## CI/CD
 
@@ -313,15 +322,14 @@ Use a real credential-loading action, or Workload Identity Federation, to popula
 Publishing the GTM workspace to a live container version is currently a manual step; `apply` only
 writes to the workspace.
 
-Two known limitations of running this in CI today, both being addressed in 0.2 (see
+One known limitation of running this in CI today, being addressed in 0.2 (see
 [ROADMAP.md](./ROADMAP.md)):
 
-- GA4 ownership is tracked only in the local, gitignored `.analytics/state.json`. A fresh CI runner
-  therefore starts with no record of which GA4 resources this tool manages, and will try to create
-  them again. Treat the GA4 part of `apply` as local-only for now. GTM is unaffected, because its
-  ownership marker lives in the container itself.
 - If someone edits the container through the GTM UI while a workspace is open, `apply` does not yet
   detect the conflict.
+
+GA4 ownership tracking works in CI as long as `.analytics/state.json` is committed (see
+[State](#state) above), so a fresh checkout already knows which GA4 resources this tool manages.
 
 ## Roadmap / not yet implemented
 

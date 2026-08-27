@@ -2,6 +2,8 @@ import { ConfigError } from '../config/errors.js';
 import { GoogleAuthError } from '../providers/google/auth/index.js';
 import { GtmApiError } from '../providers/google/gtm/errors.js';
 import { Ga4ApiError } from '../providers/google/ga4/errors.js';
+import { StateVersionError } from '../core/state.js';
+import { StateLockedError } from '../core/lock.js';
 
 /**
  * Prints the message of an error this tool raises itself — those messages are already
@@ -13,7 +15,9 @@ export function printFailure(error: unknown): void {
     error instanceof ConfigError ||
     error instanceof GoogleAuthError ||
     error instanceof GtmApiError ||
-    error instanceof Ga4ApiError
+    error instanceof Ga4ApiError ||
+    error instanceof StateVersionError ||
+    error instanceof StateLockedError
   ) {
     console.error(error.message);
     return;

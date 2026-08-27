@@ -11,8 +11,22 @@ export interface StateFile {
   resources: Record<string, string>;
 }
 
+/** Bump when the `resources` shape changes, and add a migration in `readState`. */
+export const STATE_VERSION = 1;
+
+/** A state file whose `version` this CLI does not know how to read. */
+export class StateVersionError extends Error {
+  constructor(path: string, foundVersion: unknown) {
+    super(
+      `${path} has state version ${JSON.stringify(foundVersion)}, but this CLI only understands version ${STATE_VERSION}. ` +
+        'Upgrade the CLI to a version that supports this state file, or downgrade the state file, before running apply.',
+    );
+    this.name = 'StateVersionError';
+  }
+}
+
 export function emptyState(): StateFile {
-  return { version: 1, resources: {} };
+  return { version: STATE_VERSION, resources: {} };
 }
 
 export function stateKey(provider: string, type: string, scope: string, id: string): string {
@@ -42,8 +56,9 @@ export async function readState(path: string): Promise<StateFile> {
   try {
     const raw = await readFile(path, 'utf8');
     const parsed: unknown = JSON.parse(raw);
-    if (isStateFile(parsed)) return parsed;
-    return emptyState();
+    if (!isStateFile(parsed)) return emptyState();
+    if (parsed.version !== STATE_VERSION) throw new StateVersionError(path, parsed.version);
+    return parsed;
   } catch (error) {
     if (isEnoent(error)) return emptyState();
     throw error;

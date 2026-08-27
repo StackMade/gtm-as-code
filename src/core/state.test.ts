@@ -3,7 +3,8 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { emptyState, findManagedId, forgetManaged, readState, recordManaged, stateKey, writeState } from './state.js';
+import { writeFile } from 'node:fs/promises';
+import { emptyState, findManagedId, forgetManaged, readState, recordManaged, stateKey, writeState, StateVersionError } from './state.js';
 
 test('recordManaged then findManagedId recovers the resource id', () => {
   const key = stateKey('google', 'ga4.dimension', '123456789', 'lead_type');
@@ -46,6 +47,18 @@ test('writeState leaves no temporary file behind — the state file is renamed i
     await writeState(path, recordManaged(emptyState(), 'k', 'v'));
 
     assert.deepEqual(await readdir(dir), ['state.json']);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('readState rejects a state file whose version this CLI does not understand', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'gtm-as-code-state-'));
+  try {
+    const path = join(dir, 'state.json');
+    await writeFile(path, JSON.stringify({ version: 2, resources: {} }), 'utf8');
+
+    await assert.rejects(() => readState(path), StateVersionError);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

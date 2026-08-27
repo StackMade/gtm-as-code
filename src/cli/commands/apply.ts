@@ -2,6 +2,7 @@ import { createInterface } from 'node:readline/promises';
 import { computePlan, type PlanResult } from './plan.js';
 import { buildDependencyGraph } from '../../core/graph.js';
 import { writeState, recordManaged, forgetManaged, readState } from '../../core/state.js';
+import { withStateLock } from '../../core/lock.js';
 import type { Change, Resource } from '../../core/resource.js';
 import { SCOPES } from '../../providers/google/auth/index.js';
 import { toGtmPayload } from '../../providers/google/gtm/mapping.js';
@@ -40,7 +41,7 @@ export async function apply(opts: GlobalOptions & { autoApprove?: boolean }): Pr
       return;
     }
 
-    await execute(result);
+    await withStateLock(result.statePath, () => execute(result));
     console.log('Apply complete.');
   } catch (error) {
     printFailure(error);

@@ -53,12 +53,6 @@ description of what the product measures, and that has uses beyond `apply`.
 The gate for using this in CI at all. Nothing here is a new feature; all of it closes a way the
 current tool can be wrong.
 
-- GA4 ownership hardening. `.analytics/state.json` is local and gitignored, so a CI runner starts
-  every run with zero known-managed GA4 resources and re-creates everything. This needs either a
-  committable or shared state backend, or a naming-convention ownership fallback that survives an
-  empty state. It blocks any honest CI story for GA4.
-- State format versioning and a lock. A version field with a read-side upgrade path, and a guard
-  against two concurrent `apply` runs interleaving writes.
 - `gtm-code publish`. Right now `apply` writes to a workspace and nothing reaches the live container
   until someone clicks Publish in the UI, so "deployed through CI/CD" is only half true. Publish
   creates a container version and publishes it, with the version name and notes stamped from the git
