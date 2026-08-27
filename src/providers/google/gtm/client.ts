@@ -11,6 +11,13 @@ export interface GtmWorkspaceRef {
   workspaceId: string;
 }
 
+/** A GTM container version, as returned by `create_version`, `versions.list`, and `versions/live`. */
+export interface GtmVersionRef {
+  containerVersionId: string;
+  name?: string;
+  notes?: string;
+}
+
 const KINDS = {
   variable: { collection: 'variables', field: 'variable', idField: 'variableId', type: 'gtm.variable' },
   trigger: { collection: 'triggers', field: 'trigger', idField: 'triggerId', type: 'gtm.trigger' },
@@ -126,6 +133,37 @@ export class GtmClient {
       await this.auth.request({ url: `${this.collectionUrl(kind)}/${gtmId}`, method: 'DELETE' });
     } catch (error) {
       throw new GtmApiError(`delete ${kind}`, resourceId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  /** Creates a container version from this workspace's current state. Does not publish it. */
+  async createVersion(name: string, notes: string): Promise<GtmVersionRef> {
+    const { accountId, containerId, workspaceId } = this.ref;
+    try {
+      const response = await this.auth.request<{ containerVersion?: GtmVersionRef; compilerError?: boolean }>({
+        url: `${BASE_URL}/accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}:create_version`,
+        method: 'POST',
+        data: { name, notes },
+      });
+      if (response.data.compilerError) throw new GtmApiError('create version for', containerId, 'COMPILER_ERROR');
+      if (!response.data.containerVersion) throw new GtmApiError('create version for', containerId, 'EMPTY_RESPONSE');
+      return response.data.containerVersion;
+    } catch (error) {
+      if (error instanceof GtmApiError) throw error;
+      throw new GtmApiError('create version for', containerId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  /** Publishes an already-created container version, making it live. */
+  async publishVersion(containerVersionId: string): Promise<void> {
+    const { accountId, containerId } = this.ref;
+    try {
+      await this.auth.request({
+        url: `${BASE_URL}/accounts/${accountId}/containers/${containerId}/versions/${containerVersionId}:publish`,
+        method: 'POST',
+      });
+    } catch (error) {
+      throw new GtmApiError('publish version', containerVersionId, extractApiStatus(error), { cause: error });
     }
   }
 }

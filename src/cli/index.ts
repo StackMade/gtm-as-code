@@ -5,6 +5,7 @@ import { init } from './commands/init.js';
 import { validate } from './commands/validate.js';
 import { plan } from './commands/plan.js';
 import { apply } from './commands/apply.js';
+import { publish } from './commands/publish.js';
 import type { GlobalOptions } from './options.js';
 
 // package.json is the only place the version is written down; `npm version` bumps it there.
@@ -52,6 +53,13 @@ program
   .option('--auto-approve', 'skip the confirmation prompt', false)
   .action(async function (this: Command) {
     await apply(globalOptions(this));
+  });
+
+program
+  .command('publish')
+  .description('create a GTM container version from the current workspace and publish it')
+  .action(async function (this: Command) {
+    await publish(globalOptions(this));
   });
 
 await program.parseAsync();

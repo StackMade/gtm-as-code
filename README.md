@@ -240,6 +240,16 @@ variables, the reverse of creation order), then creates in dependency order so a
 a trigger created in the same run, then updates. Prompts `Continue? [y/N]` unless `--auto-approve`
 is passed.
 
+`apply` only writes to the GTM workspace. Nothing reaches the live container until you run
+`gtm-code publish`.
+
+### `gtm-code publish`
+
+Creates a GTM container version from the current workspace and publishes it. The version name and
+notes are taken from the current commit (short SHA and subject line) when run inside a git
+checkout, so the GTM version history stays readable against your commit history. Requires the
+`tagmanager.publish` scope in addition to the ones `apply` already needs.
+
 ## State
 
 `.analytics/state.json` is created and updated automatically by `plan` and `apply`. It tracks which
@@ -319,8 +329,8 @@ jobs:
 
 Use a real credential-loading action, or Workload Identity Federation, to populate
 `GOOGLE_APPLICATION_CREDENTIALS`, and adapt this to whatever your organization already uses.
-Publishing the GTM workspace to a live container version is currently a manual step; `apply` only
-writes to the workspace.
+`apply` only writes to the GTM workspace; add a `run: npx gtm-code publish` step after it if you
+want every push to `main` to also go live.
 
 One known limitation of running this in CI today, being addressed in 0.2 (see
 [ROADMAP.md](./ROADMAP.md)):

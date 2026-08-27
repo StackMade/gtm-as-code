@@ -53,10 +53,6 @@ description of what the product measures, and that has uses beyond `apply`.
 The gate for using this in CI at all. Nothing here is a new feature; all of it closes a way the
 current tool can be wrong.
 
-- `gtm-code publish`. Right now `apply` writes to a workspace and nothing reaches the live container
-  until someone clicks Publish in the UI, so "deployed through CI/CD" is only half true. Publish
-  creates a container version and publishes it, with the version name and notes stamped from the git
-  commit, which also gives a readable change history in the GTM UI.
 - Workspace conflict detection. GTM workspaces can diverge when a human edits the container through
   the UI. The API exposes workspace status and a sync operation, and `apply` should refuse to
   proceed on an unresolved conflict rather than silently overwriting.

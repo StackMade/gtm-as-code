@@ -42,6 +42,51 @@ test('list follows nextPageToken until the last page', async () => {
   assert.deepEqual(auth.tokens, [undefined, 'page-2']);
 });
 
+test('createVersion posts to :create_version and returns the created version', async () => {
+  const calls: unknown[] = [];
+  const auth = {
+    request: async (options: unknown) => {
+      calls.push(options);
+      return { data: { containerVersion: { containerVersionId: '9', name: 'v9' } } };
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  const version = await client.createVersion('v9', 'notes');
+
+  assert.deepEqual(version, { containerVersionId: '9', name: 'v9' });
+  assert.deepEqual(calls, [
+    { url: 'https://www.googleapis.com/tagmanager/v2/accounts/1/containers/2/workspaces/3:create_version', method: 'POST', data: { name: 'v9', notes: 'notes' } },
+  ]);
+});
+
+test('createVersion throws when GTM reports a compiler error', async () => {
+  const auth = { request: async () => ({ data: { compilerError: true } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  await assert.rejects(() => client.createVersion('v9', 'notes'), /COMPILER_ERROR/);
+});
+
+test('publishVersion posts to versions/{id}:publish', async () => {
+  const calls: unknown[] = [];
+  const auth = {
+    request: async (options: unknown) => {
+      calls.push(options);
+      return { data: {} };
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  await client.publishVersion('9');
+
+  assert.deepEqual(calls, [
+    { url: 'https://www.googleapis.com/tagmanager/v2/accounts/1/containers/2/versions/9:publish', method: 'POST' },
+  ]);
+});
+
 test('listManaged sees resources that only appear on a later page', async () => {
   const auth = pagingAuth([
     { trigger: [{ triggerId: '1', notes: 'unmanaged' }], nextPageToken: 'page-2' },
