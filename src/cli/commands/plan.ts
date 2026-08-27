@@ -47,6 +47,7 @@ export async function plan(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmReadonly, SCOPES.ga4Readonly]);
     render(result, opts.format);
+    if (result.changes.length > 0) process.exitCode = 2;
   } catch (error) {
     printFailure(error);
     process.exitCode = 1;

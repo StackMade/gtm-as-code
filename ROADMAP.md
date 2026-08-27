@@ -53,8 +53,6 @@ description of what the product measures, and that has uses beyond `apply`.
 The gate for using this in CI at all. Nothing here is a new feature; all of it closes a way the
 current tool can be wrong.
 
-- Exit codes. Distinct codes for "no changes", "changes pending", and "error", so CI can branch on
-  them.
 - The output contract the GitHub Action consumes. See below.
 
 ### The GitHub Action

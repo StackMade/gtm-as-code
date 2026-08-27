@@ -237,6 +237,11 @@ property, and prints the result. Never creates, updates, or deletes anything.
 "changes": [{ "operation", "type", "id" }] }`, meant for a CI step to parse. `--format markdown`
 prints a counts line and a table, one row per change, meant to be posted as a PR comment as-is.
 
+`plan` exits `0` when there's nothing to do, `2` when the plan has changes, and `1` on error, so a
+CI step can branch on the exit code without parsing output at all (the same three-way convention as
+`terraform plan -detailed-exitcode`). `apply` and `rollback` keep the plain `0`/`1` convention:
+once they've run, there's no "pending" state left to signal.
+
 ### `gtm-code apply [--auto-approve] [--allow-destroy]`
 
 Runs the same diff as `plan`, then executes it. Deletes go first (tags, then triggers, then
