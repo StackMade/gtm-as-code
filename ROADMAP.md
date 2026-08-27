@@ -48,12 +48,27 @@ The config is a tracking plan, not just an API wrapper. The `events:` block comp
 GA4 resources today. Everything in 0.6 exists because that block is also the only machine-readable
 description of what the product measures, and that has uses beyond `apply`.
 
-## 0.2: safe to run unattended
+## Done (0.2): safe to run unattended
 
-The gate for using this in CI at all. Nothing here is a new feature; all of it closes a way the
-current tool can be wrong.
+The gate for using this in CI at all. Nothing here was a new feature; all of it closed a way the
+tool could be wrong.
 
-- The output contract the GitHub Action consumes. See below.
+- GA4 ownership tracked by committing `.analytics/state.json` instead of gitignoring it, so a CI
+  runner starts with a known set of managed resources instead of an empty one
+- State format versioning (`readState` rejects a version it doesn't understand) and a lock on
+  `apply`'s write phase, so two concurrent `apply` runs can't interleave writes
+- `gtm-code publish`, to create a GTM container version from the workspace `apply` wrote to and
+  publish it, named after the current git commit
+- Workspace conflict detection: `apply` refuses to proceed if the GTM workspace has changes it
+  can't safely merge, most likely a human editing it in the UI
+- `gtm-code rollback`, to republish the container version that was live before the current one
+- `--allow-destroy`, required on top of `--auto-approve` for any `apply` that includes a delete
+- `plan --format json` and `plan --format markdown`, and a three-way exit code (`0` no changes,
+  `2` changes pending, `1` error) so CI can branch without parsing output
+
+Not yet published to npm; the package is still at `0.1.1`. See README's [Output
+contract](./README.md#output-contract) for the stable JSON shape and exit codes this milestone
+adds.
 
 ### The GitHub Action
 
@@ -92,12 +107,13 @@ Its inputs are `command` (`validate`, `plan`, or `apply`), `version`, `config`,
 (default 22), `auto-approve`, and `allow-destroy`. The last two default to false: an apply action
 that auto-approves by default is a footgun in precisely the environment it runs in.
 
-Outputs are the part that is still missing: `has-changes` plus create, update and delete counts and
-the rendered plan, so a caller can branch, gate an environment, or post the plan as a PR comment.
-They read `--format json`, and the PR comment reads `--format markdown`, which is why they appear
-under 0.2 rather than earlier. This repository's half of the work is that contract: the JSON shape
-and the exit codes, documented and treated as stable, because an action in another repository parses
-them.
+Outputs let a caller branch, gate an environment, or post the plan as a PR comment: `has-changes`
+plus create, update and delete counts, and the rendered plan. This repository's half of that work is
+done: `plan --format json` and `plan --format markdown` (see README's [Output
+contract](./README.md#output-contract)) and `plan`'s three-way exit code are documented and treated
+as stable, because the action in its own repository parses them. Wiring the action's own
+`has-changes`/count/`plan` outputs to that contract is that repository's remaining work, not this
+one's.
 
 Releases are cut by tagging `vX.Y.Z` in the action repository and force-moving the `vX` tag onto it,
 which is the convention consumers already expect from every other action.

@@ -233,14 +233,8 @@ Parses and schema-checks the config offline. No Google API calls, no credentials
 Authorizes with read-only scopes, diffs your config against the live GTM container and GA4
 property, and prints the result. Never creates, updates, or deletes anything.
 
-`--format json` prints `{ "hasChanges": boolean, "counts": { "create", "update", "delete" },
-"changes": [{ "operation", "type", "id" }] }`, meant for a CI step to parse. `--format markdown`
-prints a counts line and a table, one row per change, meant to be posted as a PR comment as-is.
-
-`plan` exits `0` when there's nothing to do, `2` when the plan has changes, and `1` on error, so a
-CI step can branch on the exit code without parsing output at all (the same three-way convention as
-`terraform plan -detailed-exitcode`). `apply` and `rollback` keep the plain `0`/`1` convention:
-once they've run, there's no "pending" state left to signal.
+See [Output contract](#output-contract) below for `--format json`, `--format markdown`, and exit
+codes.
 
 ### `gtm-code apply [--auto-approve] [--allow-destroy]`
 
@@ -293,6 +287,44 @@ it's the only record of which GA4 resources this tool owns. A CI runner that che
 needs this file to know what already exists, or every run tries to re-create every GA4 resource.
 Keep your real `analytics/.env.analytics` file gitignored instead, and commit only
 `.env.analytics.example`.
+
+## Output contract
+
+`gtm-code plan` is the command scripts and the companion GitHub Action are meant to parse. Its
+`--format json` and exit codes are treated as stable; a breaking change to either is a major-version
+change for this package.
+
+`--format json` prints:
+
+```json
+{
+  "hasChanges": true,
+  "counts": { "create": 1, "update": 0, "delete": 0 },
+  "changes": [{ "operation": "create", "type": "gtm.trigger", "id": "generate_lead" }]
+}
+```
+
+`operation` is `"create"`, `"update"`, or `"delete"`. `type` is the resource type as it appears in
+`plan`'s text output (`gtm.variable`, `gtm.trigger`, `gtm.tag`, `ga4.dimension`, `ga4.metric`,
+`ga4.keyEvent`). `id` is the logical id from your config, the same one that appears as a YAML key
+under `events:`, `gtm:`, or `ga4:`.
+
+`--format markdown` prints a one-line counts summary and a table with the same three columns,
+formatted so a caller can post it as a PR comment as-is:
+
+```markdown
+**GTM as Code plan**
+
+1 to create, 0 to update, 0 to delete
+
+| Action | Kind | Id |
+| --- | --- | --- |
+| + create | trigger | `generate_lead` |
+```
+
+Exit codes: `0` when the plan has no changes, `2` when it does, `1` on error, the same three-way
+convention as `terraform plan -detailed-exitcode`. `apply` and `rollback` use the plain `0`/`1`
+convention instead: once they've run, there's no "pending" state left to signal.
 
 ## CI/CD
 
