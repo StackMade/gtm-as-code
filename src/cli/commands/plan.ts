@@ -46,7 +46,7 @@ export interface PlanResult {
 export async function plan(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmReadonly, SCOPES.ga4Readonly]);
-    render(result);
+    render(result, opts.format);
   } catch (error) {
     printFailure(error);
     process.exitCode = 1;
@@ -123,7 +123,59 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
   return { changes, counts, config, compiled, gtm, ga4, statePath, gtmIds, ga4Names, triggerGtmIdToLogicalId };
 }
 
-function render({ changes, counts }: PlanResult): void {
+function render(result: PlanResult, format: GlobalOptions['format']): void {
+  if (format === 'json') return renderJson(result);
+  if (format === 'markdown') return renderMarkdown(result);
+  renderText(result);
+}
+
+export interface PlanJson {
+  hasChanges: boolean;
+  counts: PlanResult['counts'];
+  changes: Array<{ operation: Change['operation']; type: string; id: string }>;
+}
+
+/** The stable output contract the GitHub Action reads: `hasChanges`, per-operation counts, and the change list. */
+export function buildPlanJson({ changes, counts }: PlanResult): PlanJson {
+  return {
+    hasChanges: changes.length > 0,
+    counts,
+    changes: changes.map((change) => {
+      const resource = resourceOf(change);
+      return { operation: change.operation, type: resource.type, id: resource.id };
+    }),
+  };
+}
+
+/** A PR-comment-ready summary: a counts line and a table, one row per change. */
+export function buildPlanMarkdown({ changes, counts }: PlanResult): string {
+  if (changes.length === 0) return '**GTM as Code**: no changes.';
+
+  const lines = [
+    '**GTM as Code plan**',
+    '',
+    `${counts.create} to create, ${counts.update} to update, ${counts.delete} to delete`,
+    '',
+    '| Action | Kind | Id |',
+    '| --- | --- | --- |',
+  ];
+  for (const change of changes) {
+    const resource = resourceOf(change);
+    const symbol = { create: '+', update: '~', delete: '-' }[change.operation];
+    lines.push(`| ${symbol} ${change.operation} | ${KIND_LABEL[resource.type] ?? resource.type} | \`${resource.id}\` |`);
+  }
+  return lines.join('\n');
+}
+
+function renderJson(result: PlanResult): void {
+  console.log(JSON.stringify(buildPlanJson(result), null, 2));
+}
+
+function renderMarkdown(result: PlanResult): void {
+  console.log(buildPlanMarkdown(result));
+}
+
+function renderText({ changes, counts }: PlanResult): void {
   console.log('GTM as Code\n');
 
   for (const { header, prefix, showAction } of [

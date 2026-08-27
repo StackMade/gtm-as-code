@@ -216,7 +216,7 @@ Global flags, available on every command:
 | `-c, --config <path>` | Path to the config file (default: auto-discovered) |
 | `-v, --verbose` | Verbose output |
 | `-q, --quiet` | Suppress non-error output |
-| `-f, --format <type>` | `text`, `json`, or `markdown`. Only `text` is implemented today; the other two are accepted but produce no different output |
+| `-f, --format <type>` | `text`, `json`, or `markdown`. `plan` supports all three; other commands ignore it and print `text` |
 
 ### `gtm-code init`
 
@@ -228,10 +228,14 @@ overwriting.
 
 Parses and schema-checks the config offline. No Google API calls, no credentials needed.
 
-### `gtm-code plan`
+### `gtm-code plan [--format text|json|markdown]`
 
 Authorizes with read-only scopes, diffs your config against the live GTM container and GA4
 property, and prints the result. Never creates, updates, or deletes anything.
+
+`--format json` prints `{ "hasChanges": boolean, "counts": { "create", "update", "delete" },
+"changes": [{ "operation", "type", "id" }] }`, meant for a CI step to parse. `--format markdown`
+prints a counts line and a table, one row per change, meant to be posted as a PR comment as-is.
 
 ### `gtm-code apply [--auto-approve] [--allow-destroy]`
 
@@ -356,13 +360,10 @@ GA4 ownership tracking works in CI as long as `.analytics/state.json` is committ
 Not available yet. These are known gaps, so please don't file a bug for them:
 
 - `gtm-code pull` (import existing GTM/GA4 resources into config)
-- `gtm-code publish` (publish a GTM workspace) and `gtm-code rollback`
 - `gtm-code diff`, `gtm-code verify`, `gtm-code docs`, `gtm-code doctor`
 - `gtm-code generate` (typed event helpers)
 - `gtm-code migrate`
-- Drift detection, and workspace conflict detection
-- `--format json` and `--format markdown` output
-- `--allow-destroy`
+- Drift detection
 - GTM built-in variables, folders, custom templates, and most trigger, variable and tag types. See
   [Schema](#schema) for what is covered
 - Consent Mode settings
