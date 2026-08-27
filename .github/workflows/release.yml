@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  # Lets the runner mint the OIDC token npm exchanges for publish rights, so no
+  # npm token is stored in this repository. Also what gives the release its provenance.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # Trusted publishing needs npm >= 11.5.1; Node 24 ships npm 11, this pins the floor.
+      - run: npm install -g npm@latest
+
+      - name: Check that the tag matches the version in package.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: test "v$(node -p "require('./package.json').version")" = "$TAG"
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      # Re-tagging a released version (say, to correct the docs it shipped with) would
+      # otherwise fail this job on a publish npm was always going to reject.
+      - name: Check whether this version is already published
+        id: published
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if npm view "@stackmade/gtm-as-code@${version}" version >/dev/null 2>&1; then
+            echo "Version ${version} is already on npm; skipping publish." >> "$GITHUB_STEP_SUMMARY"
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # prepack rebuilds dist/ from a clean checkout. Provenance is attached
+      # automatically under OIDC, so no --provenance flag is needed.
+      - if: steps.published.outputs.already != 'true'
+        run: npm publish --access public

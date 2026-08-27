@@ -1,0 +1,15 @@
+.serena/
+.context/
+graphify-out/
+.codex/
+AGENTS.md
+CLAUDE.md
+
+node_modules/
+dist/
+*.log
+
+# Produced by running the tool against a real container, and holding real IDs.
+.analytics/
+.env.analytics
+analytics/.env.analytics

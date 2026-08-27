@@ -1,0 +1,40 @@
+{
+  "name": "@stackmade/gtm-as-code",
+  "version": "0.1.0",
+  "description": "GTM & GA4 as code — define Google Tag Manager and Analytics 4 config in YAML, plan/apply like Terraform.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "gtm-code": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "eslint src",
+    "test": "npm run build && find dist -name '*.test.js' -print0 | xargs -0 node --test",
+    "format": "prettier --write .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "google-auth-library": "^11.0.2",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.1",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "eslint": "^10.9.1",
+    "prettier": "^3.9.6",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-eslint": "^8.68.0"
+  }
+}
