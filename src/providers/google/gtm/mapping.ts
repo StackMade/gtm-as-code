@@ -1,4 +1,5 @@
 import type { GtmKind, GtmObject } from './client.js';
+import { BUILT_IN_TRIGGERS, BUILT_IN_TRIGGER_IDS } from './builtin-triggers.js';
 
 /**
  * Payload shapes below were confirmed live against a real GTM container
@@ -80,7 +81,9 @@ function recoverTagFiringBehavior(object: GtmObject): Record<string, unknown> {
 /** Resolves a tag's `trigger`/`exceptTrigger` logical ids to GTM's `firingTriggerId`/`blockingTriggerId`. */
 function resolveTagTriggerIds(desiredState: Record<string, unknown>, context: MappingContext): GtmObject {
   const resolve = (ids: string[] | undefined) =>
-    (ids ?? []).map((id) => context.triggerGtmIds?.[id]).filter((id): id is string => Boolean(id));
+    (ids ?? [])
+      .map((id) => context.triggerGtmIds?.[id] ?? BUILT_IN_TRIGGERS[id])
+      .filter((id): id is string => Boolean(id));
   const firingTriggerId = resolve(desiredState.trigger as string[] | undefined);
   const blockingTriggerId = resolve(desiredState.exceptTrigger as string[] | undefined);
   const extra: GtmObject = {};
@@ -92,7 +95,9 @@ function resolveTagTriggerIds(desiredState: Record<string, unknown>, context: Ma
 /** Recovers a tag's `trigger`/`exceptTrigger` logical id lists from GTM's `firingTriggerId`/`blockingTriggerId`. */
 function recoverTagTriggerIds(object: GtmObject, context: ReverseMappingContext): { trigger: string[]; exceptTrigger: string[] } {
   const recover = (ids: unknown) =>
-    ((ids ?? []) as string[]).map((gtmId) => context.triggerGtmIdToLogicalId?.[gtmId]).filter((id): id is string => Boolean(id));
+    ((ids ?? []) as string[])
+      .map((gtmId) => context.triggerGtmIdToLogicalId?.[gtmId] ?? BUILT_IN_TRIGGER_IDS[gtmId])
+      .filter((id): id is string => Boolean(id));
   return { trigger: recover(object.firingTriggerId), exceptTrigger: recover(object.blockingTriggerId) };
 }
 

@@ -163,6 +163,34 @@ test('googleTag reverse mapping without a reverse trigger-id context yields an e
   assert.deepEqual(fromGtmPayload('tag', gtm).trigger, []);
 });
 
+test('googleTag resolves a reserved built-in trigger name to its fixed GTM id, with no config trigger declared', () => {
+  const gtm = toGtmPayload('tag', 'ga4_config', {
+    type: 'googleTag',
+    measurementId: 'G-TESTTEST',
+    trigger: ['Initialization - All Pages'],
+  });
+  assert.deepEqual(gtm.firingTriggerId, ['2147479573']);
+});
+
+test('a config-declared trigger id wins over a same-named built-in trigger', () => {
+  const gtm = toGtmPayload(
+    'tag',
+    'ga4_config',
+    { type: 'googleTag', measurementId: 'G-TESTTEST', trigger: ['All Pages'] },
+    { triggerGtmIds: { 'All Pages': '42' } },
+  );
+  assert.deepEqual(gtm.firingTriggerId, ['42']);
+});
+
+test('reverse mapping recovers a built-in trigger id back to its reserved name', () => {
+  const gtm = toGtmPayload('tag', 'ga4_config', {
+    type: 'googleTag',
+    measurementId: 'G-TESTTEST',
+    trigger: ['Initialization - All Pages'],
+  });
+  assert.deepEqual(fromGtmPayload('tag', gtm).trigger, ['Initialization - All Pages']);
+});
+
 test('constant variable maps to GTM "c" type and back', () => {
   const gtm = toGtmPayload('variable', 'env', { type: 'constant', value: 'prod' });
   assert.deepEqual(gtm, { name: 'env', type: 'c', parameter: [{ type: 'template', key: 'value', value: 'prod' }] });

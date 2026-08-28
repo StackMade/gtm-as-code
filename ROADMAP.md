@@ -182,6 +182,15 @@ be expressed at all. Ordered within the milestone by how many containers each un
   referencing a name declared there), maps to GTM's `parentFolderId`. Ownership-tracked (`notes`)
   and topologically ordered before the resources that reference it, same as any other kind.
   Covered end to end: schema validation, dependency graph, apply, pull, and export-ingest.
+- Built-in trigger references. **Done.** A tag's `trigger`/`exceptTrigger` can reference GTM's
+  built-in triggers ("All Pages", "Initialization - All Pages") by name, resolved to their fixed
+  numeric ids (`src/providers/google/gtm/builtin-triggers.ts`) rather than looked up in
+  `gtm.triggers`, since GTM never returns these from `triggers.list`. This was task_035's other
+  half, deferred since 2026-08-28 for lack of a verified resolution mechanism; live-verified
+  2026-08-29 (`triggers.get` 404s for both known ids regardless, but a tag created with
+  `firingTriggerId` set to either succeeds and reads back correctly). "Consent Initialization - All
+  Pages" is a known third built-in trigger whose numeric id couldn't be confirmed through the API
+  this way and isn't guessed at.
 - Custom templates. Managing template code as files in the repo, which is where sandboxed JavaScript
   belongs anyway. **Blocked, not a skipped-on-purpose gap like conversion linker.** The `templates`
   collection itself works fine (live-verified: `POST .../templates` with a `templateData` string in

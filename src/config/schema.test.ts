@@ -76,6 +76,28 @@ gtm:
   assert.throws(() => validate(yaml), ConfigError);
 });
 
+test('a tag can reference a reserved built-in trigger name without declaring it under gtm.triggers', () => {
+  const yaml = `
+gtm:
+  tags:
+    ga4_config:
+      type: googleTag
+      trigger: ["Initialization - All Pages"]
+      consent: { status: notNeeded }
+`;
+  const config = validate(yaml);
+  assert.deepEqual(config.gtm.tags.ga4_config.trigger, ['Initialization - All Pages']);
+});
+
+test('an unrecognized trigger name still fails validation, built-in names do not open it up entirely', () => {
+  const yaml = `
+gtm:
+  tags:
+    tracker: { type: customHtml, html: "<script></script>", trigger: [does_not_exist] }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
 test('an event parameter named "email" fails PII lint', () => {
   const yaml = `
 events:

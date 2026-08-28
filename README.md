@@ -231,7 +231,8 @@ gtm:
     <name>: { type: string, trigger: [string, ...], exceptTrigger: [string, ...],
                setupTags: [string, ...], teardownTags: [string, ...], folder: string,
                protected: boolean, consent: { status: needed | notNeeded, types: [string, ...] }, ... }
-      # trigger and exceptTrigger (optional, blocking triggers) reference trigger names above
+      # trigger and exceptTrigger (optional, blocking triggers) reference trigger names above, or
+      #   a reserved built-in trigger name ("All Pages", "Initialization - All Pages")
       # setupTags/teardownTags (optional) reference other tag names, mapping to GTM's
       #   setupTag/teardownTag tag sequencing
       # folder (optional, on variables/triggers/tags too) references a name under gtm.folders
@@ -259,6 +260,14 @@ remotely, `apply` enables it. Names not in the config are left alone — enablin
 GTM UI is never reported as drift, and `apply` never disables one. Only the click/page/form/error/
 history/debug set is supported today (see `src/providers/google/gtm/builtin-variables.ts` for the
 exact list); scroll depth, element visibility, video, and AMP variables aren't yet.
+
+A tag's `trigger`/`exceptTrigger` can reference GTM's built-in triggers by name (`"All Pages"`,
+`"Initialization - All Pages"`) without declaring them under `gtm.triggers`. These trigger objects
+always exist in every container but are never returned by GTM's own `triggers.list`/`triggers.get`,
+so a lookup against `gtm.triggers` can't resolve them, this tool maps the reserved name straight to
+GTM's fixed numeric trigger id instead (see `src/providers/google/gtm/builtin-triggers.ts`). Only the
+two names above are supported; `"Consent Initialization - All Pages"` is a known GTM UI trigger whose
+numeric id couldn't be confirmed through the API and isn't guessed at.
 
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),

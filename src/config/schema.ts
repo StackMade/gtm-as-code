@@ -2,6 +2,7 @@ import { ConfigError } from './errors.js';
 import { locateLine, locateFile, type ParsedConfig } from './parser.js';
 import { closestMatch } from './suggest.js';
 import { BUILT_IN_VARIABLE_NAMES } from '../providers/google/gtm/builtin-variables.js';
+import { BUILT_IN_TRIGGERS, BUILT_IN_TRIGGER_NAMES } from '../providers/google/gtm/builtin-triggers.js';
 
 export interface EventParameterDef {
   /** `items` is GA4's ecommerce item array (view_item, add_to_cart, purchase, ...). */
@@ -583,8 +584,8 @@ function checkCrossReferences(
   for (const [name, tag] of Object.entries(gtm.tags)) {
     for (const field of ['trigger', 'exceptTrigger'] as const) {
       for (const triggerName of tag[field] ?? []) {
-        if (!gtm.triggers[triggerName]) {
-          const suggestion = closestMatch(triggerName, Object.keys(gtm.triggers));
+        if (!gtm.triggers[triggerName] && !BUILT_IN_TRIGGERS[triggerName]) {
+          const suggestion = closestMatch(triggerName, [...Object.keys(gtm.triggers), ...BUILT_IN_TRIGGER_NAMES]);
           const body = [{ label: 'Unknown trigger', value: triggerName }];
           if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
           fail(parsed, ['gtm', 'tags', name, field], body);
