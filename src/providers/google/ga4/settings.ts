@@ -33,7 +33,12 @@ export async function diffGa4Settings(ga4: Ga4Client, config: AnalyticsConfig['g
 
   if (config.streamWebsiteUrl) {
     const stream = await ga4.findWebStreamByUrl(config.streamWebsiteUrl);
-    if (!stream) throw new Error(`No GA4 web data stream found for URL "${config.streamWebsiteUrl}".`);
+    if (!stream) {
+      const streams = await ga4.listDataStreams();
+      const known = streams.map((s) => s.webStreamData?.defaultUri).filter(Boolean);
+      const knownList = known.length > 0 ? ` Web streams on this property: ${known.join(', ')}.` : ' This property has no web data streams.';
+      throw new Error(`No GA4 web data stream found for URL "${config.streamWebsiteUrl}".${knownList}`);
+    }
     result.streamName = stream.name;
 
     if (config.enhancedMeasurement) {

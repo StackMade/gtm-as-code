@@ -1,4 +1,4 @@
-import { computePlan, type PlanResult } from './plan.js';
+import { computePlan, describeGa4SettingsChanges, type PlanResult } from './plan.js';
 import { confirm } from '../confirm.js';
 import { buildDependencyGraph } from '../../core/graph.js';
 import { writeState, recordManaged, forgetManaged, setProtected, readState } from '../../core/state.js';
@@ -55,7 +55,9 @@ export async function apply(opts: GlobalOptions): Promise<void> {
     console.log(`${result.counts.update} to update`);
     console.log(`${result.counts.delete} to delete`);
     if (result.builtInVariablesToEnable.length > 0) console.log(`${result.builtInVariablesToEnable.length} built-in variable(s) to enable`);
-    if (hasGa4SettingsChanges(result.ga4Settings)) console.log('GA4 property/stream settings to update');
+    if (hasGa4SettingsChanges(result.ga4Settings)) {
+      console.log(`GA4 property/stream settings to update: ${describeGa4SettingsChanges(result.ga4Settings).join(', ')}`);
+    }
     console.log('');
 
     if (!opts.autoApprove && !(await confirm())) {

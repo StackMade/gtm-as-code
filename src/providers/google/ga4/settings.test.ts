@@ -61,10 +61,18 @@ test('diffGa4Settings resolves the stream by URL and diffs only the enhanced mea
   assert.deepEqual(diff.enhancedMeasurement, { patch: { scrollsEnabled: false }, updateMask: ['scrollsEnabled'] });
 });
 
-test('diffGa4Settings throws when no stream matches the configured URL', async () => {
-  const ga4 = client({ dataStreams: { dataStreams: [] } });
+test('diffGa4Settings throws when no stream matches the configured URL, listing the streams that do exist', async () => {
+  const ga4 = client({ dataStreams: { dataStreams: [{ name: 'properties/1/dataStreams/9', type: 'WEB_DATA_STREAM', webStreamData: { defaultUri: 'https://other.example.com' } }] } });
   await assert.rejects(
     () => diffGa4Settings(ga4, { ...baseGa4Config(), streamWebsiteUrl: 'https://example.com' }),
-    /No GA4 web data stream found/,
+    /No GA4 web data stream found.*https:\/\/other\.example\.com/,
   );
+});
+
+test('diffGa4Settings matches a stream URL regardless of a trailing slash', async () => {
+  const ga4 = client({
+    dataStreams: { dataStreams: [{ name: 'properties/1/dataStreams/9', type: 'WEB_DATA_STREAM', webStreamData: { defaultUri: 'https://example.com/' } }] },
+  });
+  const diff = await diffGa4Settings(ga4, { ...baseGa4Config(), streamWebsiteUrl: 'https://example.com' });
+  assert.equal(diff.streamName, 'properties/1/dataStreams/9');
 });

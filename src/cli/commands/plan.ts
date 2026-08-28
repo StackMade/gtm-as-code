@@ -242,7 +242,7 @@ export function planMarkdownWithBuiltIns(result: PlanResult): string {
   return lines.join('\n');
 }
 
-function describeGa4SettingsChanges(diff: Ga4SettingsDiff): string[] {
+export function describeGa4SettingsChanges(diff: Ga4SettingsDiff): string[] {
   const changes: string[] = [];
   if (diff.dataRetention) changes.push(`dataRetention → ${diff.dataRetention.patch.eventDataRetention}`);
   if (diff.googleSignals) changes.push(`googleSignals → ${diff.googleSignals.patch.state}`);

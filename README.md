@@ -252,6 +252,8 @@ ga4:
   streamWebsiteUrl: string
     # the web data stream these stream-scoped settings apply to, looked up by URL, never created
   dataRetention: TWO_MONTHS | FOURTEEN_MONTHS | TWENTY_SIX_MONTHS | THIRTY_EIGHT_MONTHS | FIFTY_MONTHS
+    # manages event data retention only, userDataRetention is untouched
+    # THIRTY_EIGHT_MONTHS and FIFTY_MONTHS are only valid on GA4 360 properties
   googleSignals: GOOGLE_SIGNALS_ENABLED | GOOGLE_SIGNALS_DISABLED
   enhancedMeasurement:
     scrollsEnabled: boolean

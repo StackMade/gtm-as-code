@@ -56,6 +56,10 @@ type Ga4ListResponse = Record<string, unknown> & { nextPageToken?: string };
 /** The Admin API caps `pageSize` at 200 and coerces anything higher down to it. */
 const GA4_MAX_PAGE_SIZE = 200;
 
+function stripTrailingSlash(url: string): string {
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+}
+
 /** By this tool's convention parameterName / eventName is the config key itself. */
 function resourceId(kind: Ga4Kind, object: Ga4Object): string {
   const key = kind === 'keyEvent' ? 'eventName' : 'parameterName';
@@ -169,7 +173,8 @@ export class Ga4Client {
    */
   async findWebStreamByUrl(url: string): Promise<DataStream | undefined> {
     const streams = await this.listDataStreams();
-    return streams.find((stream) => stream.webStreamData?.defaultUri === url);
+    const target = stripTrailingSlash(url);
+    return streams.find((stream) => stripTrailingSlash(stream.webStreamData?.defaultUri ?? '') === target);
   }
 
   async listDataStreams(): Promise<DataStream[]> {
