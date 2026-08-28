@@ -74,11 +74,33 @@ export function toGtmPayload(
   }
 
   if (kind === 'tag' && type === 'googleTag') {
-    return {
+    const configParameters = (desiredState.configParameters ?? {}) as Record<string, string>;
+    const triggerIds = (desiredState.trigger as string[] | undefined) ?? [];
+    const payload: GtmObject = {
       name: resourceId,
       type: 'googtag',
-      parameter: [{ type: 'template', key: 'tagId', value: String(desiredState.measurementId) }],
+      parameter: [
+        { type: 'template', key: 'tagId', value: String(desiredState.measurementId) },
+        ...(Object.keys(configParameters).length > 0
+          ? [
+              {
+                type: 'list',
+                key: 'configSettingsTable',
+                list: Object.entries(configParameters).map(([name, value]) => ({
+                  type: 'map',
+                  map: [
+                    { type: 'template', key: 'parameter', value: name },
+                    { type: 'template', key: 'parameterValue', value },
+                  ],
+                })),
+              },
+            ]
+          : []),
+      ],
     };
+    const firingTriggerId = triggerIds.map((id) => context.triggerGtmIds?.[id]).filter((id): id is string => Boolean(id));
+    if (firingTriggerId.length > 0) payload.firingTriggerId = firingTriggerId;
+    return payload;
   }
 
   throw new Error(`No GTM payload mapping for ${kind} type "${type}"`);
@@ -125,7 +147,18 @@ export function fromGtmPayload(kind: GtmKind, object: GtmObject, context: Revers
   }
 
   if (kind === 'tag' && object.type === 'googtag') {
-    return { type: 'googleTag', measurementId: param('tagId') };
+    const table = parameter.find((p) => p.key === 'configSettingsTable');
+    const configParameters: Record<string, string> = {};
+    for (const entry of (table?.list ?? []) as Array<{ map: GtmParam[] }>) {
+      const name = entry.map.find((p) => p.key === 'parameter')?.value;
+      const value = entry.map.find((p) => p.key === 'parameterValue')?.value;
+      if (name !== undefined && value !== undefined) configParameters[name] = value;
+    }
+    const firingTriggerId = (object.firingTriggerId ?? []) as string[];
+    const trigger = firingTriggerId
+      .map((gtmId) => context.triggerGtmIdToLogicalId?.[gtmId])
+      .filter((id): id is string => Boolean(id));
+    return { type: 'googleTag', measurementId: param('tagId'), configParameters, trigger };
   }
 
   throw new Error(`No reverse mapping for ${kind} type "${String(object.type)}"`);

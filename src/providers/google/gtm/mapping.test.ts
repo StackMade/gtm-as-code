@@ -50,7 +50,59 @@ test('ga4Event reverse mapping without a reverse trigger-id context yields an em
 test('googleTag (GA4 configuration) maps to GTM "googtag" type and back', () => {
   const gtm = toGtmPayload('tag', 'ga4_config', { type: 'googleTag', measurementId: 'G-TESTTEST' });
   assert.deepEqual(gtm, { name: 'ga4_config', type: 'googtag', parameter: [{ type: 'template', key: 'tagId', value: 'G-TESTTEST' }] });
-  assert.deepEqual(fromGtmPayload('tag', gtm), { type: 'googleTag', measurementId: 'G-TESTTEST' });
+  assert.deepEqual(fromGtmPayload('tag', gtm), {
+    type: 'googleTag',
+    measurementId: 'G-TESTTEST',
+    configParameters: {},
+    trigger: [],
+  });
+});
+
+test('googleTag maps configParameters into configSettingsTable and back', () => {
+  const gtm = toGtmPayload('tag', 'ga4_config', {
+    type: 'googleTag',
+    measurementId: 'G-TESTTEST',
+    configParameters: { send_page_view: 'false' },
+  });
+  const parameter = gtm.parameter as Array<{ key: string }>;
+  const table = parameter.find((p) => p.key === 'configSettingsTable');
+  assert.deepEqual(table, {
+    type: 'list',
+    key: 'configSettingsTable',
+    list: [{ type: 'map', map: [{ type: 'template', key: 'parameter', value: 'send_page_view' }, { type: 'template', key: 'parameterValue', value: 'false' }] }],
+  });
+  assert.deepEqual(fromGtmPayload('tag', gtm), {
+    type: 'googleTag',
+    measurementId: 'G-TESTTEST',
+    configParameters: { send_page_view: 'false' },
+    trigger: [],
+  });
+});
+
+test('googleTag maps trigger into firingTriggerId and back', () => {
+  const gtm = toGtmPayload(
+    'tag',
+    'ga4_config',
+    { type: 'googleTag', measurementId: 'G-TESTTEST', trigger: ['all_pages'] },
+    { triggerGtmIds: { all_pages: '3' } },
+  );
+  assert.deepEqual(gtm.firingTriggerId, ['3']);
+  assert.deepEqual(fromGtmPayload('tag', gtm, { triggerGtmIdToLogicalId: { '3': 'all_pages' } }), {
+    type: 'googleTag',
+    measurementId: 'G-TESTTEST',
+    configParameters: {},
+    trigger: ['all_pages'],
+  });
+});
+
+test('googleTag reverse mapping without a reverse trigger-id context yields an empty trigger list', () => {
+  const gtm = toGtmPayload(
+    'tag',
+    'ga4_config',
+    { type: 'googleTag', measurementId: 'G-TESTTEST', trigger: ['all_pages'] },
+    { triggerGtmIds: { all_pages: '3' } },
+  );
+  assert.deepEqual(fromGtmPayload('tag', gtm).trigger, []);
 });
 
 test('unknown type throws rather than silently producing a bad payload', () => {
