@@ -4,6 +4,8 @@ import { Command } from 'commander';
 import { init } from './commands/init.js';
 import { validate } from './commands/validate.js';
 import { plan } from './commands/plan.js';
+import { diff } from './commands/diff.js';
+import { drift } from './commands/drift.js';
 import { apply } from './commands/apply.js';
 import { publish } from './commands/publish.js';
 import { rollback } from './commands/rollback.js';
@@ -47,6 +49,22 @@ program
   .description('show what would change without applying it')
   .action(async function (this: Command) {
     await plan(globalOptions(this));
+  });
+
+program
+  .command('diff')
+  .description('compare two config files without touching the network')
+  .argument('<fileA>', 'baseline config file')
+  .argument('<fileB>', 'desired config file')
+  .action(async function (this: Command, fileA: string, fileB: string) {
+    await diff(fileA, fileB, globalOptions(this));
+  });
+
+program
+  .command('drift')
+  .description('check whether live state has diverged from config (exit 1 if it has)')
+  .action(async function (this: Command) {
+    await drift(globalOptions(this));
   });
 
 program

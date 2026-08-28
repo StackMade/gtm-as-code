@@ -136,8 +136,14 @@ export interface PlanJson {
   changes: Array<{ operation: Change['operation']; type: string; id: string }>;
 }
 
+/** Only the fields these renderers need — lets `diff`/`drift` reuse them without a full `PlanResult`. */
+export interface ChangeSummary {
+  changes: Change[];
+  counts: PlanResult['counts'];
+}
+
 /** The stable output contract the GitHub Action reads: `hasChanges`, per-operation counts, and the change list. */
-export function buildPlanJson({ changes, counts }: PlanResult): PlanJson {
+export function buildPlanJson({ changes, counts }: ChangeSummary): PlanJson {
   return {
     hasChanges: changes.length > 0,
     counts,
@@ -149,7 +155,7 @@ export function buildPlanJson({ changes, counts }: PlanResult): PlanJson {
 }
 
 /** A PR-comment-ready summary: a counts line and a table, one row per change. */
-export function buildPlanMarkdown({ changes, counts }: PlanResult): string {
+export function buildPlanMarkdown({ changes, counts }: ChangeSummary): string {
   if (changes.length === 0) return '**GTM as Code**: no changes.';
 
   const lines = [
