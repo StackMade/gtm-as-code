@@ -26,6 +26,10 @@ export interface TagDef extends ResourceDef {
   trigger?: string[];
   /** Trigger names that block this tag from firing (GTM's `blockingTriggerId`). */
   exceptTrigger?: string[];
+  /** Tag names that must fire (and succeed) before this tag (GTM's `setupTag`). */
+  setupTags?: string[];
+  /** Tag names that fire after this tag (GTM's `teardownTag`). */
+  teardownTags?: string[];
 }
 
 export interface DimensionDef {
@@ -256,8 +260,14 @@ function validateTagMap(parsed: ParsedConfig, raw: unknown, path: string[]): Rec
       def.exceptTrigger !== undefined
         ? requireStringArray(parsed, def.exceptTrigger, [...itemPath, 'exceptTrigger'])
         : undefined;
+    const setupTags =
+      def.setupTags !== undefined ? requireStringArray(parsed, def.setupTags, [...itemPath, 'setupTags']) : undefined;
+    const teardownTags =
+      def.teardownTags !== undefined
+        ? requireStringArray(parsed, def.teardownTags, [...itemPath, 'teardownTags'])
+        : undefined;
     const folder = def.folder !== undefined ? requireString(parsed, def.folder, [...itemPath, 'folder']) : undefined;
-    result[name] = { ...def, type, trigger, exceptTrigger, folder };
+    result[name] = { ...def, type, trigger, exceptTrigger, setupTags, teardownTags, folder };
   }
   return result;
 }
@@ -312,8 +322,8 @@ function validateMetrics(
   return result;
 }
 
-// No cycle detection here: no field in this schema lets one resource reference another in a
-// way that could cycle, so there is nothing to detect yet.
+// `setupTags`/`teardownTags` can cycle (tag A sets up B, B sets up A); that is caught by
+// `buildDependencyGraph`'s topological sort (`CircularDependencyError`), not here.
 function checkCrossReferences(
   parsed: ParsedConfig,
   gtm: AnalyticsConfig['gtm'],
@@ -344,6 +354,22 @@ function checkCrossReferences(
         if (!gtm.triggers[triggerName]) {
           const suggestion = closestMatch(triggerName, Object.keys(gtm.triggers));
           const body = [{ label: 'Unknown trigger', value: triggerName }];
+          if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
+          fail(parsed, ['gtm', 'tags', name, field], body);
+        }
+      }
+    }
+  }
+
+  for (const [name, tag] of Object.entries(gtm.tags)) {
+    for (const field of ['setupTags', 'teardownTags'] as const) {
+      for (const tagName of tag[field] ?? []) {
+        if (tagName === name) {
+          fail(parsed, ['gtm', 'tags', name, field], [{ label: 'A tag cannot reference itself', value: tagName }]);
+        }
+        if (!gtm.tags[tagName]) {
+          const suggestion = closestMatch(tagName, Object.keys(gtm.tags));
+          const body = [{ label: 'Unknown tag', value: tagName }];
           if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
           fail(parsed, ['gtm', 'tags', name, field], body);
         }

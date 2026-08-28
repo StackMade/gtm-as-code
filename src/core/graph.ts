@@ -111,6 +111,12 @@ export function buildDependencyGraph(config: AnalyticsConfig): DependencyGraph {
     for (const triggerId of [...(tag.trigger ?? []), ...(tag.exceptTrigger ?? [])]) {
       graph.addEdge(nodeId('trigger', triggerId), self);
     }
+    for (const setupTagId of tag.setupTags ?? []) {
+      graph.addEdge(nodeId('tag', setupTagId), self);
+    }
+    for (const teardownTagId of tag.teardownTags ?? []) {
+      graph.addEdge(self, nodeId('tag', teardownTagId));
+    }
     for (const variableId of collectVariableRefs(tag, variableIds)) {
       graph.addEdge(nodeId('variable', variableId), self);
     }

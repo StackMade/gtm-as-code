@@ -157,25 +157,33 @@ be expressed at all. Ordered within the milestone by how many containers each un
   in config), enable-only through `plan`/`apply`/`drift`, no ownership tracking — see the
   Configuration reference in README. Scroll depth, element visibility, video, and AMP variables are
   not yet covered.
-- Trigger types. Page view, DOM ready, window loaded, click (all elements and links), form
-  submission, scroll depth, element visibility, timer, history change, JavaScript error, custom
-  event with regex matching, trigger groups.
+- Trigger types — **done**. Page view, DOM ready, window loaded, click (all elements and links),
+  form submission, scroll depth, element visibility, timer, history change, JavaScript error, custom
+  event with regex matching, trigger groups. Bare types (`pageview`, `domReady`, `windowLoaded`,
+  `click`, `linkClick`, `formSubmission`, `scrollDepth`, `historyChange`, `jsError`) need only their
+  GTM `type` string; `elementVisibility`, `timer`, and `triggerGroup` carry fields of their own.
 - Trigger exceptions — **done**. `exceptTrigger` on a tag maps to GTM's `blockingTriggerId`,
   alongside the existing `trigger`/`firingTriggerId`. Works for every tag type this tool already
   supports (`ga4Event`, `googleTag`); nothing new to add once a new tag type lands, since both
   fields resolve through the same generic trigger-id helper.
-- Variable types. Constant, custom JavaScript, lookup table, regex table, URL, cookie, DOM element,
-  JavaScript variable, auto-event variables, Google tag settings.
-- Tag types. Custom HTML, custom image, conversion linker, and community-gallery templates, which is
-  how most non-Google vendors (Meta, LinkedIn, TikTok) actually get installed.
-- Tag firing behavior. Priority, once-per-event/page/ever, tag sequencing with setup and teardown
-  tags, scheduling.
+- Variable types — **done**. Constant, custom JavaScript, lookup table, regex table, URL, cookie,
+  DOM element, JavaScript variable, auto-event variables, Google tag settings.
+- Tag types — **partly done**. Custom HTML and custom image are covered. Conversion linker and
+  community-gallery templates are not: conversion linker's live payload (`vendorTemplate.parameter`)
+  needs real Floodlight advertiser/group/activity ids that this sandbox container doesn't have, and
+  community-gallery templates need a published gallery template's own parameter schema — neither
+  could be live-verified, so per this file's own header they weren't guessed at.
+- Tag firing behavior — **done**. Priority, once-per-event/page/unlimited, scheduling
+  (`scheduleStart`/`scheduleEnd`), and tag sequencing (`setupTags`/`teardownTags`, cross-referenced
+  and dependency-ordered like `trigger`/`exceptTrigger`). "Once per ever" isn't a GTM firing option —
+  the API only has unlimited/once-per-event/once-per-page (GTM's own "once per page" wording is
+  `ONCE_PER_LOAD`).
 - Folders — **done**. `gtm.folders` (variables/triggers/tags gain an optional `folder` field
   referencing a name declared there), maps to GTM's `parentFolderId`. Ownership-tracked (`notes`)
   and topologically ordered before the resources that reference it, same as any other kind.
   Covered end to end: schema validation, dependency graph, apply, pull, and export-ingest.
 - Custom templates. Managing template code as files in the repo, which is where sandboxed JavaScript
-  belongs anyway.
+  belongs anyway. Not started.
 
 ## 0.5: Consent Mode v2 and governance
 

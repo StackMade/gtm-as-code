@@ -191,8 +191,11 @@ gtm:
   triggers:
     <name>: { type: string, folder: string, ... }
   tags:
-    <name>: { type: string, trigger: [string, ...], exceptTrigger: [string, ...], folder: string, ... }
+    <name>: { type: string, trigger: [string, ...], exceptTrigger: [string, ...],
+               setupTags: [string, ...], teardownTags: [string, ...], folder: string, ... }
       # trigger and exceptTrigger (optional, blocking triggers) reference trigger names above
+      # setupTags/teardownTags (optional) reference other tag names, mapping to GTM's
+      #   setupTag/teardownTag tag sequencing
       # folder (optional, on variables/triggers/tags too) references a name under gtm.folders
 
 ga4:
@@ -204,8 +207,9 @@ ga4:
     <name>: {}
 ```
 
-Only `type` (and, for tags, `trigger`) is schema-validated on `gtm.variables`, `gtm.triggers` and
-`gtm.tags` entries today. Per-resource-type property shapes aren't validated yet.
+Only `type` (and, for tags, `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`) is
+schema-validated on `gtm.variables`, `gtm.triggers` and `gtm.tags` entries today. Per-resource-type
+property shapes aren't validated yet.
 
 `gtm.builtInVariables` is enable-only: `plan`/`drift` report a name listed but not yet enabled
 remotely, `apply` enables it. Names not in the config are left alone — enabling one by hand in the
@@ -217,6 +221,7 @@ Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),
 - the same resource id defined twice across `gtm.*` and `ga4.*`,
 - a tag's `trigger` or `exceptTrigger` referencing a trigger name that doesn't exist,
+- a tag's `setupTags` or `teardownTags` referencing a tag name that doesn't exist, or itself,
 - a `folder` referencing a name not defined under `gtm.folders`.
 
 ## CLI reference
@@ -413,8 +418,9 @@ Not available yet. These are known gaps, so please don't file a bug for them:
 - `gtm-code generate` (typed event helpers)
 - `gtm-code migrate`
 - Drift detection
-- GTM custom templates, and most trigger, variable and tag types. See [Schema](#schema) for what
-  is covered
+- GTM custom templates; conversion linker and community-gallery template tags (their payloads need
+  fields — Floodlight ids, a gallery template's own parameter schema — this tool can't live-verify
+  against a sandbox container). See [Schema](#schema) for what is covered
 - Consent Mode settings
 - GA4 data streams, enhanced measurement, audiences, and property settings
 

@@ -85,7 +85,7 @@ test('an object type this tool has no reverse mapping for is skipped, not fatal'
       containerId: '2',
       variable: [
         { variableId: '1', name: 'Form', type: 'v', parameter: [{ type: 'template', key: 'name', value: 'form' }] },
-        { variableId: '2', name: 'Some Built-in', type: 'k' },
+        { variableId: '2', name: 'Some Built-in', type: 'somethingUnmapped' },
       ],
     }),
   );
