@@ -4,7 +4,8 @@ import { closestMatch } from './suggest.js';
 import { BUILT_IN_VARIABLE_NAMES } from '../providers/google/gtm/builtin-variables.js';
 
 export interface EventParameterDef {
-  type: 'string' | 'number' | 'boolean';
+  /** `items` is GA4's ecommerce item array (view_item, add_to_cart, purchase, ...). */
+  type: 'string' | 'number' | 'boolean' | 'items';
   dimension?: boolean;
   optional?: boolean;
 }
@@ -84,7 +85,7 @@ type Json = Record<string, unknown>;
 const TOP_LEVEL_KEYS = ['version', 'project', 'google', 'events', 'gtm', 'ga4'];
 const EVENT_KEYS = ['description', 'keyEvent', 'parameters', 'consent'];
 const PARAMETER_KEYS = ['type', 'dimension', 'optional'];
-const PARAMETER_TYPES = ['string', 'number', 'boolean'] as const;
+const PARAMETER_TYPES = ['string', 'number', 'boolean', 'items'] as const;
 const DIMENSION_KEYS = ['scope', 'parameter', 'protected'];
 const METRIC_KEYS = ['scope', 'parameter', 'measurementUnit', 'protected'];
 const SCOPES = ['event', 'user'] as const;
@@ -210,6 +211,11 @@ function validateParameters(
       def.dimension !== undefined
         ? requireBoolean(parsed, def.dimension, [...paramPath, 'dimension'])
         : undefined;
+    if (dimension && type === 'items') {
+      fail(parsed, [...paramPath, 'dimension'], [
+        { label: 'A type: items parameter cannot be a dimension', value: 'GA4 custom dimensions take a single scalar value' },
+      ]);
+    }
     const optional =
       def.optional !== undefined
         ? requireBoolean(parsed, def.optional, [...paramPath, 'optional'])
@@ -482,7 +488,10 @@ const GA4_RESERVED_EVENT_PREFIXES = ['dynamic_link_', 'notification_'];
 
 // GA4 parameter names cannot start with these, and these exact names are reserved for GA4 itself.
 const GA4_RESERVED_PARAMETER_PREFIXES = ['_', 'firebase_', 'ga_', 'google_', 'gtag.'];
-const GA4_RESERVED_PARAMETER_NAMES = ['cid', 'currency', 'customer_id', 'dclid', 'gclid', 'query_id', 'session_id', 'uid', 'user_id'];
+const GA4_RESERVED_PARAMETER_NAMES = ['cid', 'customer_id', 'dclid', 'gclid', 'query_id', 'session_id', 'uid', 'user_id'];
+// `currency` is reserved only for custom dimension/metric creation (support.google.com/analytics/answer/13316687);
+// GA4's own recommended ecommerce events require it as a standard parameter, so it's only blocked with `dimension: true`.
+const GA4_DIMENSION_RESERVED_PARAMETER_NAMES = [...GA4_RESERVED_PARAMETER_NAMES, 'currency'];
 
 function checkGa4NamingLint(parsed: ParsedConfig, events: Record<string, EventDef>): void {
   for (const [eventName, event] of Object.entries(events)) {
@@ -531,8 +540,11 @@ function checkGa4NamingLint(parsed: ParsedConfig, events: Record<string, EventDe
           { label: 'Limit', value: `${GA4_NAME_MAX_LENGTH} characters` },
         ]);
       }
+      const reservedNames = event.parameters[paramName]?.dimension
+        ? GA4_DIMENSION_RESERVED_PARAMETER_NAMES
+        : GA4_RESERVED_PARAMETER_NAMES;
       if (
-        GA4_RESERVED_PARAMETER_NAMES.includes(paramName) ||
+        reservedNames.includes(paramName) ||
         GA4_RESERVED_PARAMETER_PREFIXES.some((prefix) => paramName.startsWith(prefix))
       ) {
         fail(parsed, paramPath, [

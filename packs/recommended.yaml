@@ -1,0 +1,34 @@
+# A handful of GA4 recommended events outside ecommerce, as an extends: pack.
+#
+# Verified against developers.google.com/analytics/devguides/collection/ga4/reference/events
+# (2026-08-29). Pull in with:
+#
+#   extends: ./packs/recommended.yaml
+#
+# See ./ecommerce.yaml for the ecommerce-specific recommended events.
+events:
+  login:
+    description: A user logs in.
+    parameters:
+      method: { type: string, optional: true }
+    consent: { status: needed, types: [analytics_storage] }
+
+  sign_up:
+    description: A user signs up.
+    parameters:
+      method: { type: string, optional: true }
+    consent: { status: needed, types: [analytics_storage] }
+
+  search:
+    description: A user searches your content.
+    parameters:
+      search_term: { type: string }
+    consent: { status: needed, types: [analytics_storage] }
+
+  share:
+    description: A user shares content.
+    parameters:
+      method: { type: string, optional: true }
+      content_type: { type: string, optional: true }
+      item_id: { type: string, optional: true }
+    consent: { status: needed, types: [analytics_storage] }

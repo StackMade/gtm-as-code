@@ -49,3 +49,26 @@ test('generateEventTypes handles a config with no events', () => {
   assert.match(source, /export type EventName = never;/);
   assert.match(source, /export interface EventParams \{\}/);
 });
+
+test('generateEventTypes emits an Item interface and Item[] field for a type: items parameter', () => {
+  const config = baseConfig({
+    events: {
+      purchase: {
+        parameters: {
+          currency: { type: 'string' },
+          items: { type: 'items' },
+        },
+      },
+    },
+  });
+
+  const source = generateEventTypes(config);
+  assert.match(source, /export interface Item \{/);
+  assert.match(source, /item_id\?: string;/);
+  assert.match(source, /items: Item\[\];/);
+});
+
+test('generateEventTypes omits the Item interface when no event uses type: items', () => {
+  const source = generateEventTypes(baseConfig({ events: { add_to_cart: { parameters: {} } } }));
+  assert.doesNotMatch(source, /export interface Item \{/);
+});

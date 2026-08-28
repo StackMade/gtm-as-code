@@ -173,6 +173,19 @@ listed above, nothing that identifies or authenticates a specific GTM/GA4 proper
 account IDs by accident. Validation errors on an entry pulled in this way point at the file and
 line it actually came from, not the root config.
 
+#### Event packs
+
+`packs/ecommerce.yaml` and `packs/recommended.yaml`, shipped in this repo, are `extends:` targets
+for GA4's recommended events. `packs/ecommerce.yaml` covers `view_item`, `add_to_cart`,
+`begin_checkout`, `purchase`, and the rest of the ecommerce set, each with its GA4-specified
+parameters, including the `items` array. `packs/recommended.yaml` covers `login`, `sign_up`,
+`search`, and `share`. Both default consent to `{ status: needed, types: [analytics_storage] }`;
+override an event in your own config to change that, root always wins.
+
+```yaml
+extends: ./node_modules/@stackmade/gtm-as-code/packs/ecommerce.yaml
+```
+
 ### Schema
 
 ```yaml
@@ -197,8 +210,9 @@ events:
     keyEvent: boolean          # optional
     parameters:
       <param_name>:
-        type: string | number | boolean
+        type: string | number | boolean | items   # items is GA4's ecommerce item array
         dimension: boolean     # optional, also registers this parameter as a GA4 dimension
+                                # (not allowed on a type: items parameter, GA4 dimensions are scalar)
         optional: boolean      # optional
     consent:                   # required: every event compiles to a ga4Event tag, which needs one
       status: needed | notNeeded
@@ -262,6 +276,8 @@ Validation also catches:
   set), a reserved parameter name or prefix (`user_id`, `ga_*`, `firebase_*`, `google_*`, `gtag.*`),
   an event with more than 25 parameters, or (checked after `events.*` compiles, since hand-written
   and event-derived dimensions share one cap) more than 50 event-scoped custom dimensions.
+  `currency` is only reserved when marked `dimension: true`, GA4's own recommended ecommerce events
+  send it as a plain parameter.
 
 ## CLI reference
 
@@ -369,8 +385,9 @@ Generates typed event helpers from `events:`: a TypeScript `EventName` union, on
 per event, an `EventParams` map, and a `track<E extends EventName>(event: E, params: EventParams[E])`
 function that pushes `{ event, ...params }` onto `window.dataLayer`. A typo in an event name or a
 missing required parameter is a compile error in the consuming app rather than missing data in GA4.
-Prints to stdout by default; `--out` writes it to a file. Runs the same validate/compile pipeline as
-`validate`.
+A `type: items` parameter emits as `Item[]`, backed by a shared `Item` interface (GA4's ecommerce
+item fields) that's only emitted when at least one event uses it. Prints to stdout by default;
+`--out` writes it to a file. Runs the same validate/compile pipeline as `validate`.
 
 ### `gtm-code adopt <kindAndId>`
 

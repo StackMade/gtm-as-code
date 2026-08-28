@@ -1,0 +1,111 @@
+# GA4 recommended ecommerce events, as an extends: pack.
+#
+# Verified against developers.google.com/analytics/devguides/collection/ga4/reference/events
+# (2026-08-29). Pull in with:
+#
+#   extends: ./packs/ecommerce.yaml
+#
+# Every event here defaults consent to { status: needed, types: [analytics_storage] }; override an
+# event in your own config if a different consent policy applies, root always wins over a pack.
+events:
+  view_item:
+    description: A user views an item.
+    parameters:
+      currency: { type: string }
+      value: { type: number }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  view_item_list:
+    description: A user views a list of items or offerings.
+    parameters:
+      item_list_id: { type: string, optional: true }
+      item_list_name: { type: string, optional: true }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  select_item:
+    description: A user selects an item from a list.
+    parameters:
+      item_list_id: { type: string, optional: true }
+      item_list_name: { type: string, optional: true }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  add_to_cart:
+    description: A user adds items to their shopping cart.
+    parameters:
+      currency: { type: string }
+      value: { type: number }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  remove_from_cart:
+    description: A user removes items from their shopping cart.
+    parameters:
+      currency: { type: string }
+      value: { type: number }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  view_cart:
+    description: A user views their shopping cart.
+    parameters:
+      currency: { type: string }
+      value: { type: number }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  begin_checkout:
+    description: A user begins checkout.
+    parameters:
+      currency: { type: string }
+      value: { type: number }
+      coupon: { type: string, optional: true }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  add_shipping_info:
+    description: A user submits their shipping information.
+    parameters:
+      currency: { type: string }
+      value: { type: number }
+      coupon: { type: string, optional: true }
+      shipping_tier: { type: string, optional: true }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  add_payment_info:
+    description: A user submits their payment information.
+    parameters:
+      currency: { type: string }
+      value: { type: number }
+      coupon: { type: string, optional: true }
+      payment_type: { type: string, optional: true }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  purchase:
+    description: A user completes a purchase.
+    keyEvent: true
+    parameters:
+      currency: { type: string }
+      value: { type: number }
+      transaction_id: { type: string }
+      shipping: { type: number, optional: true }
+      tax: { type: number, optional: true }
+      coupon: { type: string, optional: true }
+      items: { type: items }
+    consent: { status: needed, types: [analytics_storage] }
+
+  refund:
+    description: A user receives a refund.
+    parameters:
+      currency: { type: string }
+      value: { type: number, optional: true }
+      transaction_id: { type: string }
+      shipping: { type: number, optional: true }
+      tax: { type: number, optional: true }
+      coupon: { type: string, optional: true }
+      items: { type: items, optional: true }
+    consent: { status: needed, types: [analytics_storage] }

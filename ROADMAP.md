@@ -254,9 +254,12 @@ relative to its value, because the data is already there.
   never carries another repo's account IDs. `ParsedConfig` gained an `origins` map from entry to the
   file it was actually defined in, so a validation error on merged-in content still points at the
   right file and line instead of the root config's.
-- Event packs. GA4 recommended events, and ecommerce in particular, shipped as includable modules
-  with typed item arrays. Ecommerce is where the parameter shapes are strict, hand-written most
-  often, and wrong most often.
+- Event packs. Done. `packs/ecommerce.yaml` and `packs/recommended.yaml`, `extends:`-able GA4
+  recommended events with their GA4-specified parameters. Added `type: items` to `EventParameterDef`
+  for GA4's ecommerce item array (`generate` emits a shared `Item` interface), and narrowed the
+  reserved-parameter-name check so `currency` is only blocked when marked `dimension: true`, since
+  it's reserved for custom dimension/metric creation, not for GA4's own recommended events that
+  require it as a standard parameter. See [[2026-08-29-event-packs]].
 
 ## 0.7: GA4 coverage
 

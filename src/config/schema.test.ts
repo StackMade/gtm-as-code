@@ -169,6 +169,52 @@ events:
   assert.throws(() => validate(yaml), ConfigError);
 });
 
+test('a plain "currency" parameter passes (reserved only for dimension/metric creation)', () => {
+  const yaml = `
+events:
+  purchase:
+    parameters:
+      currency: { type: string }
+    consent: { status: notNeeded }
+`;
+  const config = validate(yaml);
+  assert.equal(config.events.purchase.parameters.currency.type, 'string');
+});
+
+test('a "currency" parameter marked dimension: true still fails (reserved for custom dimensions)', () => {
+  const yaml = `
+events:
+  purchase:
+    parameters:
+      currency: { type: string, dimension: true }
+    consent: { status: notNeeded }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('type: items is accepted for an ecommerce item array parameter', () => {
+  const yaml = `
+events:
+  purchase:
+    parameters:
+      items: { type: items }
+    consent: { status: notNeeded }
+`;
+  const config = validate(yaml);
+  assert.equal(config.events.purchase.parameters.items.type, 'items');
+});
+
+test('a type: items parameter cannot be marked dimension: true', () => {
+  const yaml = `
+events:
+  purchase:
+    parameters:
+      items: { type: items, dimension: true }
+    consent: { status: notNeeded }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
 test('an event with more than 25 parameters fails GA4 naming lint', () => {
   const params = Array.from({ length: 26 }, (_, i) => `  param_${i}: { type: string }`).join('\n');
   const yaml = `
