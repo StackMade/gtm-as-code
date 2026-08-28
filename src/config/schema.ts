@@ -22,6 +22,8 @@ export interface ResourceDef {
 
 export interface TagDef extends ResourceDef {
   trigger?: string[];
+  /** Trigger names that block this tag from firing (GTM's `blockingTriggerId`). */
+  exceptTrigger?: string[];
 }
 
 export interface DimensionDef {
@@ -245,7 +247,11 @@ function validateTagMap(parsed: ParsedConfig, raw: unknown, path: string[]): Rec
       def.trigger !== undefined
         ? requireStringArray(parsed, def.trigger, [...itemPath, 'trigger'])
         : undefined;
-    result[name] = { ...def, type, trigger };
+    const exceptTrigger =
+      def.exceptTrigger !== undefined
+        ? requireStringArray(parsed, def.exceptTrigger, [...itemPath, 'exceptTrigger'])
+        : undefined;
+    result[name] = { ...def, type, trigger, exceptTrigger };
   }
   return result;
 }
@@ -326,12 +332,14 @@ function checkCrossReferences(
   for (const name of Object.keys(ga4.metrics)) record(name, `ga4.metrics.${name}`, ['ga4', 'metrics', name]);
 
   for (const [name, tag] of Object.entries(gtm.tags)) {
-    for (const triggerName of tag.trigger ?? []) {
-      if (!gtm.triggers[triggerName]) {
-        const suggestion = closestMatch(triggerName, Object.keys(gtm.triggers));
-        const body = [{ label: 'Unknown trigger', value: triggerName }];
-        if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
-        fail(parsed, ['gtm', 'tags', name, 'trigger'], body);
+    for (const field of ['trigger', 'exceptTrigger'] as const) {
+      for (const triggerName of tag[field] ?? []) {
+        if (!gtm.triggers[triggerName]) {
+          const suggestion = closestMatch(triggerName, Object.keys(gtm.triggers));
+          const body = [{ label: 'Unknown trigger', value: triggerName }];
+          if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
+          fail(parsed, ['gtm', 'tags', name, field], body);
+        }
       }
     }
   }

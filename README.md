@@ -189,7 +189,8 @@ gtm:
   triggers:
     <name>: { type: string, ... }
   tags:
-    <name>: { type: string, trigger: [string, ...], ... }   # trigger references trigger names above
+    <name>: { type: string, trigger: [string, ...], exceptTrigger: [string, ...], ... }
+      # trigger and exceptTrigger (optional, blocking triggers) reference trigger names above
 
 ga4:
   dimensions:
@@ -212,7 +213,7 @@ exact list); scroll depth, element visibility, video, and AMP variables aren't y
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),
 - the same resource id defined twice across `gtm.*` and `ga4.*`,
-- a tag's `trigger` referencing a trigger name that doesn't exist.
+- a tag's `trigger` or `exceptTrigger` referencing a trigger name that doesn't exist.
 
 ## CLI reference
 

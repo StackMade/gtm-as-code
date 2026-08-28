@@ -102,7 +102,7 @@ export function buildDependencyGraph(config: AnalyticsConfig): DependencyGraph {
   for (const [id, tag] of Object.entries(config.gtm.tags)) {
     const self = nodeId('tag', id);
     graph.addNode(self);
-    for (const triggerId of tag.trigger ?? []) {
+    for (const triggerId of [...(tag.trigger ?? []), ...(tag.exceptTrigger ?? [])]) {
       graph.addEdge(nodeId('trigger', triggerId), self);
     }
     for (const variableId of collectVariableRefs(tag, variableIds)) {

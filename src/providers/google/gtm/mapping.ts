@@ -8,8 +8,27 @@ import type { GtmKind, GtmObject } from './client.js';
 export interface MappingContext {
   /** Measurement id (G-XXXXXXX) for a `ga4Event` tag, if not already on its desired state. */
   measurementId?: string;
-  /** Logical trigger id -> GTM's own numeric trigger id, for `firingTriggerId`. */
+  /** Logical trigger id -> GTM's own numeric trigger id, for `firingTriggerId`/`blockingTriggerId`. */
   triggerGtmIds?: Record<string, string>;
+}
+
+/** Resolves a tag's `trigger`/`exceptTrigger` logical ids to GTM's `firingTriggerId`/`blockingTriggerId`. */
+function resolveTagTriggerIds(desiredState: Record<string, unknown>, context: MappingContext): GtmObject {
+  const resolve = (ids: string[] | undefined) =>
+    (ids ?? []).map((id) => context.triggerGtmIds?.[id]).filter((id): id is string => Boolean(id));
+  const firingTriggerId = resolve(desiredState.trigger as string[] | undefined);
+  const blockingTriggerId = resolve(desiredState.exceptTrigger as string[] | undefined);
+  const extra: GtmObject = {};
+  if (firingTriggerId.length > 0) extra.firingTriggerId = firingTriggerId;
+  if (blockingTriggerId.length > 0) extra.blockingTriggerId = blockingTriggerId;
+  return extra;
+}
+
+/** Recovers a tag's `trigger`/`exceptTrigger` logical id lists from GTM's `firingTriggerId`/`blockingTriggerId`. */
+function recoverTagTriggerIds(object: GtmObject, context: ReverseMappingContext): { trigger: string[]; exceptTrigger: string[] } {
+  const recover = (ids: unknown) =>
+    ((ids ?? []) as string[]).map((gtmId) => context.triggerGtmIdToLogicalId?.[gtmId]).filter((id): id is string => Boolean(id));
+  return { trigger: recover(object.firingTriggerId), exceptTrigger: recover(object.blockingTriggerId) };
 }
 
 export function toGtmPayload(
@@ -47,7 +66,6 @@ export function toGtmPayload(
   if (kind === 'tag' && type === 'ga4Event') {
     const parameters = (desiredState.parameters ?? {}) as Record<string, string>;
     const measurementId = context.measurementId ?? (desiredState.measurementId as string | undefined);
-    const triggerIds = (desiredState.trigger as string[] | undefined) ?? [];
     const payload: GtmObject = {
       name: resourceId,
       type: 'gaawe',
@@ -68,14 +86,11 @@ export function toGtmPayload(
         },
       ],
     };
-    const firingTriggerId = triggerIds.map((id) => context.triggerGtmIds?.[id]).filter((id): id is string => Boolean(id));
-    if (firingTriggerId.length > 0) payload.firingTriggerId = firingTriggerId;
-    return payload;
+    return { ...payload, ...resolveTagTriggerIds(desiredState, context) };
   }
 
   if (kind === 'tag' && type === 'googleTag') {
     const configParameters = (desiredState.configParameters ?? {}) as Record<string, string>;
-    const triggerIds = (desiredState.trigger as string[] | undefined) ?? [];
     const payload: GtmObject = {
       name: resourceId,
       type: 'googtag',
@@ -98,9 +113,7 @@ export function toGtmPayload(
           : []),
       ],
     };
-    const firingTriggerId = triggerIds.map((id) => context.triggerGtmIds?.[id]).filter((id): id is string => Boolean(id));
-    if (firingTriggerId.length > 0) payload.firingTriggerId = firingTriggerId;
-    return payload;
+    return { ...payload, ...resolveTagTriggerIds(desiredState, context) };
   }
 
   throw new Error(`No GTM payload mapping for ${kind} type "${type}"`);
@@ -133,16 +146,12 @@ export function fromGtmPayload(kind: GtmKind, object: GtmObject, context: Revers
       const value = entry.map.find((p) => p.key === 'parameterValue')?.value;
       if (name !== undefined && value !== undefined) parameters[name] = value;
     }
-    const firingTriggerId = (object.firingTriggerId ?? []) as string[];
-    const trigger = firingTriggerId
-      .map((gtmId) => context.triggerGtmIdToLogicalId?.[gtmId])
-      .filter((id): id is string => Boolean(id));
     return {
       type: 'ga4Event',
       eventName: param('eventName'),
       measurementId: param('measurementIdOverride'),
       parameters,
-      trigger,
+      ...recoverTagTriggerIds(object, context),
     };
   }
 
@@ -154,11 +163,7 @@ export function fromGtmPayload(kind: GtmKind, object: GtmObject, context: Revers
       const value = entry.map.find((p) => p.key === 'parameterValue')?.value;
       if (name !== undefined && value !== undefined) configParameters[name] = value;
     }
-    const firingTriggerId = (object.firingTriggerId ?? []) as string[];
-    const trigger = firingTriggerId
-      .map((gtmId) => context.triggerGtmIdToLogicalId?.[gtmId])
-      .filter((id): id is string => Boolean(id));
-    return { type: 'googleTag', measurementId: param('tagId'), configParameters, trigger };
+    return { type: 'googleTag', measurementId: param('tagId'), configParameters, ...recoverTagTriggerIds(object, context) };
   }
 
   throw new Error(`No reverse mapping for ${kind} type "${String(object.type)}"`);

@@ -34,6 +34,7 @@ test('parses a normal export and resolves a tag firing trigger back to a logical
       measurementId: undefined,
       parameters: {},
       trigger: ['generate_lead'],
+      exceptTrigger: [],
     },
   });
 });

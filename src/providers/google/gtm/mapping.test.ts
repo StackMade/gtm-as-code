@@ -34,6 +34,7 @@ test('ga4Event tag maps parameters into eventSettingsTable and back', () => {
     measurementId: 'G-TESTTEST',
     parameters: { form: '{{form}}', source: '{{source}}' },
     trigger: ['generate_lead'],
+    exceptTrigger: [],
   });
 });
 
@@ -55,6 +56,7 @@ test('googleTag (GA4 configuration) maps to GTM "googtag" type and back', () => 
     measurementId: 'G-TESTTEST',
     configParameters: {},
     trigger: [],
+    exceptTrigger: [],
   });
 });
 
@@ -76,6 +78,7 @@ test('googleTag maps configParameters into configSettingsTable and back', () => 
     measurementId: 'G-TESTTEST',
     configParameters: { send_page_view: 'false' },
     trigger: [],
+    exceptTrigger: [],
   });
 });
 
@@ -92,6 +95,25 @@ test('googleTag maps trigger into firingTriggerId and back', () => {
     measurementId: 'G-TESTTEST',
     configParameters: {},
     trigger: ['all_pages'],
+    exceptTrigger: [],
+  });
+});
+
+test('googleTag maps exceptTrigger into blockingTriggerId and back', () => {
+  const gtm = toGtmPayload(
+    'tag',
+    'ga4_config',
+    { type: 'googleTag', measurementId: 'G-TESTTEST', exceptTrigger: ['debug_mode'] },
+    { triggerGtmIds: { debug_mode: '9' } },
+  );
+  assert.deepEqual(gtm.blockingTriggerId, ['9']);
+  assert.equal(gtm.firingTriggerId, undefined);
+  assert.deepEqual(fromGtmPayload('tag', gtm, { triggerGtmIdToLogicalId: { '9': 'debug_mode' } }), {
+    type: 'googleTag',
+    measurementId: 'G-TESTTEST',
+    configParameters: {},
+    trigger: [],
+    exceptTrigger: ['debug_mode'],
   });
 });
 

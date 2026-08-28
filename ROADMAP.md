@@ -160,8 +160,10 @@ be expressed at all. Ordered within the milestone by how many containers each un
 - Trigger types. Page view, DOM ready, window loaded, click (all elements and links), form
   submission, scroll depth, element visibility, timer, history change, JavaScript error, custom
   event with regex matching, trigger groups.
-- Trigger exceptions. Blocking triggers change firing semantics and are the thing people forget
-  exists. They belong with trigger coverage, not after it.
+- Trigger exceptions — **done**. `exceptTrigger` on a tag maps to GTM's `blockingTriggerId`,
+  alongside the existing `trigger`/`firingTriggerId`. Works for every tag type this tool already
+  supports (`ga4Event`, `googleTag`); nothing new to add once a new tag type lands, since both
+  fields resolve through the same generic trigger-id helper.
 - Variable types. Constant, custom JavaScript, lookup table, regex table, URL, cookie, DOM element,
   JavaScript variable, auto-event variables, Google tag settings.
 - Tag types. Custom HTML, custom image, conversion linker, and community-gallery templates, which is
