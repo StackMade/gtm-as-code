@@ -282,7 +282,25 @@ GA4 hardening is a hard prerequisite for all of it.
 - Search Console link. Google Ads and BigQuery links are deliberately excluded, and not planned for
   any later milestone either.
 
-## 0.8: environments and scale
+## 0.8: verify against reality
+
+Everything before this verifies that the configuration is what was declared. This verifies that the
+data is. Moved ahead of environments/scale: it is a correctness gate, the same category as 0.2/0.3,
+not breadth, and this roadmap orders correctness gates before breadth on principle. Nothing in it
+depends on multi-environment or multi-container support existing first.
+
+- `gtm-code verify`. Query the GA4 Data API for the declared events over the last N days and report
+  which ones have never been received, or are missing declared parameters. It needs a different API
+  and scope than the Admin API work above, hence its own milestone. This is the check the GTM UI
+  cannot give you: config can be perfect while the site never fires the event.
+- `gtm-code doctor`. Check credentials, API enablement, granted scopes, and quota headroom, and
+  explain what's missing instead of failing mid-run.
+
+## 0.9: environments and scale
+
+Moved after verification on purpose: multi-environment, multi-container, and access-as-code are real
+but currently speculative scope, no adopter has asked for a second container or property yet. Revisit
+the ordering if that changes before 0.8 ships.
 
 - An `environments:` block and `--env`. Dev, staging and production against different containers and
   properties from one config.
@@ -292,18 +310,6 @@ GA4 hardening is a hard prerequisite for all of it.
 - Access as code. GTM user permissions and GA4 access bindings. Useful, and also the point at which
   a mistake in this tool becomes a security incident, hence last, and behind `--allow-destroy`-style
   guards.
-
-## 0.9: verify against reality
-
-Everything before this verifies that the configuration is what was declared. This verifies that the
-data is.
-
-- `gtm-code verify`. Query the GA4 Data API for the declared events over the last N days and report
-  which ones have never been received, or are missing declared parameters. It needs a different API
-  and scope than the Admin API work above, hence its own milestone. This is the check the GTM UI
-  cannot give you: config can be perfect while the site never fires the event.
-- `gtm-code doctor`. Check credentials, API enablement, granted scopes, and quota headroom, and
-  explain what's missing instead of failing mid-run.
 
 ## 1.0
 
