@@ -235,8 +235,11 @@ relative to its value, because the data is already there.
   API-enforced limit, and a hard-fail linter would break real configs and CI on a minor version
   bump. All offline, zero API cost, and it catches at review time what would otherwise fail
   mid-`apply` or get silently rejected/scrubbed by GA4.
-- `gtm-code docs`. Generate a data dictionary, in markdown or HTML, from `events:`. Every analytics
-  team maintains this by hand in a spreadsheet that is wrong within a month.
+- `gtm-code docs`. Done. Generates a Markdown data dictionary from `events:`: one section per event
+  with description, key-event/consent flags, and a parameter table. Stdout by default, `--out` to
+  write a file. HTML output dropped from the original scope: Markdown renders fine on GitHub/GitLab
+  and in most wikis, and a second output format is easy to add later if someone needs it. Every
+  analytics team maintains this by hand in a spreadsheet that is wrong within a month.
 - `gtm-code generate`. Typed event helpers from `events:`: TypeScript types plus a `track()`
   function, so a typo in an event name is a compile error rather than missing data.
 - Event packs. GA4 recommended events, and ecommerce in particular, shipped as includable modules

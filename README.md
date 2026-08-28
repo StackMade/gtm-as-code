@@ -337,6 +337,13 @@ slugifying each object's GTM name, with `_2`/`_3` suffixes on collisions. Asks b
 existing output file, except when pulling a single `--resource`, which merges in place. Requires the
 same read-only scopes as `plan`, unless you're using `--from-export`.
 
+### `gtm-code docs [--out <path>]`
+
+Generates a data dictionary (Markdown) from `events:`: one section per event with its description,
+key-event and consent flags, and a parameter table (type, required, custom dimension). Prints to
+stdout by default; `--out` writes it to a file instead. Runs the same validate/compile pipeline as
+`validate`, so a config that fails to validate fails `docs` too.
+
 ### `gtm-code adopt <kindAndId>`
 
 Stamps ownership on a resource `pull` already brought into the config, so `plan`/`apply` start

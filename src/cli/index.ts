@@ -11,6 +11,7 @@ import { publish } from './commands/publish.js';
 import { rollback } from './commands/rollback.js';
 import { pull } from './commands/pull.js';
 import { adopt } from './commands/adopt.js';
+import { docs } from './commands/docs.js';
 import type { GlobalOptions } from './options.js';
 
 // package.json is the only place the version is written down; `npm version` bumps it there.
@@ -110,6 +111,15 @@ program
   .argument('<kindAndId>', 'e.g. tag:generate_lead_tag')
   .action(async function (this: Command, resourceArg: string) {
     await adopt(resourceArg, globalOptions(this));
+  });
+
+program
+  .command('docs')
+  .description('generate a data dictionary (markdown) from the events in the config')
+  .option('--out <path>', 'write to this file instead of stdout')
+  .action(function (this: Command) {
+    const opts = this.opts<{ out?: string }>();
+    docs({ ...globalOptions(this), out: opts.out });
   });
 
 await program.parseAsync();
