@@ -1,5 +1,29 @@
 # @stackmade/gtm-as-code
 
+## 0.4.0
+
+### Minor Changes
+
+- 6b2b557: Add `exceptTrigger` on `gtm.tags` entries, mapping to GTM's blocking-trigger mechanism
+  (`blockingTriggerId`). Works the same way `trigger` already does: validated against declared
+  triggers, ordered in the dependency graph, applied and read back through `plan`/`apply`/`pull`.
+- 0e8b4e5: Add `gtm.folders` as a new GTM resource kind, with an optional `folder` field on variables,
+  triggers, and tags. Maps to GTM's `parentFolderId`. Ownership-tracked and dependency-ordered like
+  any other kind, and supported end to end by `plan`/`apply`/`pull`/`--from-export`.
+- b4ad582: Add most remaining GTM trigger, variable, and tag types (page view, click, timer, trigger groups,
+  constant, custom JavaScript, lookup/regex tables, cookie, custom HTML, custom image, and more), tag
+  firing behavior (`priority`, `firingOption`, `scheduleStart`/`scheduleEnd`, `setupTags`/
+  `teardownTags`), and regex matching on custom-event triggers (`eventNameMatchType: 'regex'`).
+  Conversion linker and community-gallery template tags, and custom templates, are still not covered.
+- b8be458: Add `gtm.builtInVariables` config, so `plan`/`apply`/`drift` can enable GTM built-in variables
+  (`Click Text`, `Page Path`, and the rest of the click/page/form/error/history/debug set). It only
+  enables variables; one not listed in config is left alone.
+
+### Patch Changes
+
+- 9dd1994: Fix `gtm-code adopt`, which was implemented and tested but never registered in the CLI, so the
+  command didn't actually run.
+
 ## 0.3.0
 
 ### Minor Changes
