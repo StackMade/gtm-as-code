@@ -170,8 +170,10 @@ be expressed at all. Ordered within the milestone by how many containers each un
   how most non-Google vendors (Meta, LinkedIn, TikTok) actually get installed.
 - Tag firing behavior. Priority, once-per-event/page/ever, tag sequencing with setup and teardown
   tags, scheduling.
-- Folders. Purely organizational, but a container with 200 tags and no folders is unreviewable in
-  the UI, and people will not accept a tool that flattens their structure.
+- Folders — **done**. `gtm.folders` (variables/triggers/tags gain an optional `folder` field
+  referencing a name declared there), maps to GTM's `parentFolderId`. Ownership-tracked (`notes`)
+  and topologically ordered before the resources that reference it, same as any other kind.
+  Covered end to end: schema validation, dependency graph, apply, pull, and export-ingest.
 - Custom templates. Managing template code as files in the repo, which is where sandboxed JavaScript
   belongs anyway.
 

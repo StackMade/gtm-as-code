@@ -184,13 +184,16 @@ events:
 
 gtm:
   builtInVariables: [string, ...]  # optional, GTM display names e.g. "Click Text", "Page Path"
+  folders:
+    <name>: {}
   variables:
-    <name>: { type: string, ... }
+    <name>: { type: string, folder: string, ... }
   triggers:
-    <name>: { type: string, ... }
+    <name>: { type: string, folder: string, ... }
   tags:
-    <name>: { type: string, trigger: [string, ...], exceptTrigger: [string, ...], ... }
+    <name>: { type: string, trigger: [string, ...], exceptTrigger: [string, ...], folder: string, ... }
       # trigger and exceptTrigger (optional, blocking triggers) reference trigger names above
+      # folder (optional, on variables/triggers/tags too) references a name under gtm.folders
 
 ga4:
   dimensions:
@@ -213,7 +216,8 @@ exact list); scroll depth, element visibility, video, and AMP variables aren't y
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),
 - the same resource id defined twice across `gtm.*` and `ga4.*`,
-- a tag's `trigger` or `exceptTrigger` referencing a trigger name that doesn't exist.
+- a tag's `trigger` or `exceptTrigger` referencing a trigger name that doesn't exist,
+- a `folder` referencing a name not defined under `gtm.folders`.
 
 ## CLI reference
 
@@ -409,8 +413,8 @@ Not available yet. These are known gaps, so please don't file a bug for them:
 - `gtm-code generate` (typed event helpers)
 - `gtm-code migrate`
 - Drift detection
-- GTM built-in variables, folders, custom templates, and most trigger, variable and tag types. See
-  [Schema](#schema) for what is covered
+- GTM custom templates, and most trigger, variable and tag types. See [Schema](#schema) for what
+  is covered
 - Consent Mode settings
 - GA4 data streams, enhanced measurement, audiences, and property settings
 

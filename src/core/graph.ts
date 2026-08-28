@@ -7,7 +7,7 @@ export class CircularDependencyError extends Error {
   }
 }
 
-type Category = 'variable' | 'trigger' | 'tag';
+type Category = 'variable' | 'trigger' | 'tag' | 'folder';
 
 function nodeId(category: Category, id: string): string {
   return `${category}:${id}`;
@@ -83,12 +83,17 @@ export function buildDependencyGraph(config: AnalyticsConfig): DependencyGraph {
   const graph = new DependencyGraph();
   const variableIds = new Set(Object.keys(config.gtm.variables));
 
+  for (const id of Object.keys(config.gtm.folders)) {
+    graph.addNode(nodeId('folder', id));
+  }
+
   for (const [id, variable] of Object.entries(config.gtm.variables)) {
     const self = nodeId('variable', id);
     graph.addNode(self);
     for (const variableId of collectVariableRefs(variable, variableIds)) {
       if (variableId !== id) graph.addEdge(nodeId('variable', variableId), self);
     }
+    if (variable.folder) graph.addEdge(nodeId('folder', variable.folder), self);
   }
 
   for (const [id, trigger] of Object.entries(config.gtm.triggers)) {
@@ -97,6 +102,7 @@ export function buildDependencyGraph(config: AnalyticsConfig): DependencyGraph {
     for (const variableId of collectVariableRefs(trigger, variableIds)) {
       graph.addEdge(nodeId('variable', variableId), self);
     }
+    if (trigger.folder) graph.addEdge(nodeId('folder', trigger.folder), self);
   }
 
   for (const [id, tag] of Object.entries(config.gtm.tags)) {
@@ -108,6 +114,7 @@ export function buildDependencyGraph(config: AnalyticsConfig): DependencyGraph {
     for (const variableId of collectVariableRefs(tag, variableIds)) {
       graph.addEdge(nodeId('variable', variableId), self);
     }
+    if (tag.folder) graph.addEdge(nodeId('folder', tag.folder), self);
   }
 
   return graph;

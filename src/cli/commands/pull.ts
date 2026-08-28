@@ -22,13 +22,14 @@ export interface PullOptions extends GlobalOptions {
   fromExport?: string;
 }
 
-export type PullKind = 'variable' | 'trigger' | 'tag' | 'dimension' | 'metric' | 'keyEvent';
+export type PullKind = 'folder' | 'variable' | 'trigger' | 'tag' | 'dimension' | 'metric' | 'keyEvent';
 
-const GTM_KINDS: GtmKind[] = ['variable', 'trigger', 'tag'];
+const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
 const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent'];
 
 /** Where a pulled resource of each kind lands in `AnalyticsConfig`. */
 const BUCKET: Record<PullKind, [top: 'gtm' | 'ga4', field: string]> = {
+  folder: ['gtm', 'folders'],
   variable: ['gtm', 'variables'],
   trigger: ['gtm', 'triggers'],
   tag: ['gtm', 'tags'],
@@ -38,6 +39,7 @@ const BUCKET: Record<PullKind, [top: 'gtm' | 'ga4', field: string]> = {
 };
 
 const KIND_LABEL: Record<PullKind, string> = {
+  folder: 'folders',
   variable: 'variables',
   trigger: 'triggers',
   tag: 'tags',
@@ -80,6 +82,7 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
   const json: unknown = JSON.parse(readFileSync(exportPath, 'utf8'));
   const container = parseContainerExport(json);
   const resources = resourcesFromExport(container) as {
+    folders: Record<string, unknown>;
     variables: Record<string, unknown>;
     triggers: Record<string, unknown>;
     tags: Record<string, unknown>;
@@ -89,7 +92,7 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
   const existingGa4 = (raw.ga4 ?? { dimensions: {}, metrics: {}, keyEvents: {} }) as Record<string, unknown>;
   const nextConfig = {
     ...raw,
-    gtm: { variables: resources.variables, triggers: resources.triggers, tags: resources.tags },
+    gtm: { folders: resources.folders, variables: resources.variables, triggers: resources.triggers, tags: resources.tags },
     ga4: existingGa4,
   };
 
@@ -97,6 +100,7 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
   writeFileSync(outPath, stringify(nextConfig), 'utf8');
 
   const counts: FoundCounts = {
+    folders: container.folder.length,
     variables: container.variable.length,
     triggers: container.trigger.length,
     tags: container.tag.length,
@@ -131,7 +135,7 @@ async function pullAll(opts: PullOptions): Promise<void> {
   const raw = parsed.data as Record<string, unknown>;
   const nextConfig = {
     ...raw,
-    gtm: { variables: gtmResources.variable, triggers: gtmResources.trigger, tags: gtmResources.tag },
+    gtm: { folders: gtmResources.folder, variables: gtmResources.variable, triggers: gtmResources.trigger, tags: gtmResources.tag },
     ga4: { dimensions: ga4Resources.dimension, metrics: ga4Resources.metric, keyEvents: ga4Resources.keyEvent },
   };
 
@@ -155,7 +159,7 @@ async function pullOne(opts: PullOptions): Promise<void> {
   const { gtmResources, ga4Resources } = await pullAllResources(gtm, ga4);
 
   const desiredState =
-    kind === 'variable' || kind === 'trigger' || kind === 'tag'
+    kind === 'folder' || kind === 'variable' || kind === 'trigger' || kind === 'tag'
       ? gtmResources[kind][id]
       : ga4Resources[kind][id];
 
@@ -192,6 +196,7 @@ async function connect(config: AnalyticsConfig): Promise<{ gtm: GtmClient; ga4: 
 }
 
 interface PulledGtm {
+  folder: Record<string, Record<string, unknown>>;
   variable: Record<string, Record<string, unknown>>;
   trigger: Record<string, Record<string, unknown>>;
   tag: Record<string, Record<string, unknown>>;
@@ -204,6 +209,7 @@ interface PulledGa4 {
 }
 
 export interface FoundCounts {
+  folders: number;
   variables: number;
   triggers: number;
   tags: number;
@@ -218,7 +224,14 @@ async function pullAllResources(
   gtm: GtmClient,
   ga4: Ga4Client,
 ): Promise<{ gtmResources: PulledGtm; ga4Resources: PulledGa4; counts: FoundCounts }> {
-  const [variables, triggers, tags] = await Promise.all(GTM_KINDS.map((kind) => gtm.list(kind)));
+  const [folders, variables, triggers, tags] = await Promise.all(GTM_KINDS.map((kind) => gtm.list(kind)));
+
+  const folderGtmIdToLogicalId: Record<string, string> = {};
+  const folderIds = assignIds(folders as GtmObject[]);
+  folders.forEach((object, index) => {
+    const gtmId = (object as GtmObject).folderId;
+    if (typeof gtmId === 'string') folderGtmIdToLogicalId[gtmId] = folderIds[index];
+  });
 
   const triggerGtmIdToLogicalId: Record<string, string> = {};
   const triggerIds = assignIds(triggers as GtmObject[]);
@@ -227,11 +240,14 @@ async function pullAllResources(
     if (typeof gtmId === 'string') triggerGtmIdToLogicalId[gtmId] = triggerIds[index];
   });
 
-  const variableMap = toGtmMap('variable', variables as GtmObject[], assignIds(variables as GtmObject[]), triggerGtmIdToLogicalId);
-  const triggerMap = toGtmMap('trigger', triggers as GtmObject[], triggerIds, triggerGtmIdToLogicalId);
-  const tagMap = toGtmMap('tag', tags as GtmObject[], assignIds(tags as GtmObject[]), triggerGtmIdToLogicalId);
+  const context = { triggerGtmIdToLogicalId, folderGtmIdToLogicalId };
+  const folderMap = toGtmMap('folder', folders as GtmObject[], folderIds, context);
+  const variableMap = toGtmMap('variable', variables as GtmObject[], assignIds(variables as GtmObject[]), context);
+  const triggerMap = toGtmMap('trigger', triggers as GtmObject[], triggerIds, context);
+  const tagMap = toGtmMap('tag', tags as GtmObject[], assignIds(tags as GtmObject[]), context);
 
   const gtmResources: PulledGtm = {
+    folder: folderMap.resources,
     variable: variableMap.resources,
     trigger: triggerMap.resources,
     tag: tagMap.resources,
@@ -247,13 +263,14 @@ async function pullAllResources(
   // "Found" counts the raw remote objects GTM returned, not just the ones this tool knows
   // how to reverse-map — otherwise an unmapped built-in type would look like a wrong container.
   const counts: FoundCounts = {
+    folders: folders.length,
     variables: variables.length,
     triggers: triggers.length,
     tags: tags.length,
     dimensions: Object.keys(ga4Resources.dimension).length,
     metrics: Object.keys(ga4Resources.metric).length,
     keyEvents: Object.keys(ga4Resources.keyEvent).length,
-    skipped: variableMap.skipped + triggerMap.skipped + tagMap.skipped,
+    skipped: folderMap.skipped + variableMap.skipped + triggerMap.skipped + tagMap.skipped,
   };
 
   return { gtmResources, ga4Resources, counts };
@@ -263,13 +280,13 @@ function toGtmMap(
   kind: GtmKind,
   objects: GtmObject[],
   ids: string[],
-  triggerGtmIdToLogicalId: Record<string, string>,
+  context: { triggerGtmIdToLogicalId: Record<string, string>; folderGtmIdToLogicalId: Record<string, string> },
 ): { resources: Record<string, Record<string, unknown>>; skipped: number } {
   const resources: Record<string, Record<string, unknown>> = {};
   let skipped = 0;
   objects.forEach((object, index) => {
     try {
-      resources[ids[index]] = fromGtmPayload(kind, object, { triggerGtmIdToLogicalId });
+      resources[ids[index]] = fromGtmPayload(kind, object, context);
     } catch {
       // No reverse mapping for this GTM object type (e.g. a built-in variable/trigger
       // this tool doesn't manage) — skip it rather than fail the whole pull.
@@ -340,6 +357,7 @@ export function buildFoundSummary(counts: FoundCounts): string[] {
     `  ${counts.tags} tags`,
     `  ${counts.triggers} triggers`,
     `  ${counts.variables} variables`,
+    `  ${counts.folders} folders`,
     `  ${counts.dimensions} custom dimensions`,
     `  ${counts.metrics} custom metrics`,
     `  ${counts.keyEvents} key events`,

@@ -16,10 +16,11 @@ import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
 import type { AnalyticsConfig } from '../../config/schema.js';
 
-const GTM_KINDS: GtmKind[] = ['variable', 'trigger', 'tag'];
+const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
 const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent'];
 
 const KIND_LABEL: Record<string, string> = {
+  'gtm.folder': 'folder',
   'gtm.variable': 'variable',
   'gtm.trigger': 'trigger',
   'gtm.tag': 'tag',
@@ -41,6 +42,7 @@ export interface PlanResult {
   /** `${kind}:${logicalId}` -> GA4's full resource `name`, for update/delete. */
   ga4Names: Record<string, string>;
   triggerGtmIdToLogicalId: Record<string, string>;
+  folderGtmIdToLogicalId: Record<string, string>;
   /** Built-in variables declared in config but not yet enabled remotely. Additive only — never disabled by `apply`. */
   builtInVariablesToEnable: string[];
 }
@@ -81,20 +83,25 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
   const gtmIds: Record<string, string> = {};
   const ga4Names: Record<string, string> = {};
 
-  const managedTriggers = await gtm.listManaged('trigger');
+  const [managedFolders, managedTriggers] = await Promise.all([gtm.listManaged('folder'), gtm.listManaged('trigger')]);
+  const folderGtmIdToLogicalId: Record<string, string> = {};
+  for (const resource of managedFolders) {
+    const gtmId = (resource.desiredState as GtmObject).folderId;
+    if (typeof gtmId === 'string') folderGtmIdToLogicalId[gtmId] = resource.id;
+  }
   const triggerGtmIdToLogicalId: Record<string, string> = {};
   for (const resource of managedTriggers) {
     const gtmId = (resource.desiredState as GtmObject).triggerId;
     if (typeof gtmId === 'string') triggerGtmIdToLogicalId[gtmId] = resource.id;
   }
 
-  // Triggers had to be read first — reverse trigger mapping needs them — but nothing
+  // Folders and triggers had to be read first — reverse mapping needs them — but nothing
   // below depends on anything else here, so the remaining listings go out together.
   const [gtmManaged, ga4Managed, enabledBuiltInVariables] = await Promise.all([
     Promise.all(
       GTM_KINDS.map(async (kind) => ({
         kind,
-        resources: kind === 'trigger' ? managedTriggers : await gtm.listManaged(kind),
+        resources: kind === 'folder' ? managedFolders : kind === 'trigger' ? managedTriggers : await gtm.listManaged(kind),
       })),
     ),
     Promise.all(GA4_KINDS.map(async (kind) => ({ kind, resources: await ga4.listManaged(kind, state) }))),
@@ -110,7 +117,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
       const object = resource.desiredState as GtmObject;
       const gtmId = object[gtmIdField(kind)];
       if (typeof gtmId === 'string') gtmIds[`${kind}:${resource.id}`] = gtmId;
-      const desiredState = fromGtmPayload(kind, object, { triggerGtmIdToLogicalId });
+      const desiredState = fromGtmPayload(kind, object, { triggerGtmIdToLogicalId, folderGtmIdToLogicalId });
       remote.push({ ...resource, desiredState });
     }
   }
@@ -140,6 +147,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     gtmIds,
     ga4Names,
     triggerGtmIdToLogicalId,
+    folderGtmIdToLogicalId,
     builtInVariablesToEnable,
   };
 }

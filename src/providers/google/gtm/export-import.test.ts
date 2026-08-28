@@ -39,6 +39,24 @@ test('parses a normal export and resolves a tag firing trigger back to a logical
   });
 });
 
+test('a variable resolves parentFolderId back to its logical folder', () => {
+  const container = parseContainerExport(
+    baseExport({
+      accountId: '1',
+      containerId: '2',
+      folder: [{ folderId: '3', name: 'Consent' }],
+      variable: [
+        { variableId: '1', name: 'Form', type: 'v', parameter: [{ type: 'template', key: 'name', value: 'form' }], parentFolderId: '3' },
+      ],
+    }),
+  );
+  assert.equal(container.folder.length, 1);
+
+  const resources = resourcesFromExport(container);
+  assert.deepEqual(resources.folders, { consent: { name: 'Consent' } });
+  assert.deepEqual(resources.variables, { form: { type: 'dataLayerVariable', variableName: 'form', folder: 'consent' } });
+});
+
 test('a missing collection defaults to an empty array', () => {
   const container = parseContainerExport(baseExport({ accountId: '1', containerId: '2', variable: [], trigger: [] }));
   assert.deepEqual(container.tag, []);

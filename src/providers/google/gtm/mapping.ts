@@ -10,6 +10,8 @@ export interface MappingContext {
   measurementId?: string;
   /** Logical trigger id -> GTM's own numeric trigger id, for `firingTriggerId`/`blockingTriggerId`. */
   triggerGtmIds?: Record<string, string>;
+  /** Logical folder id -> GTM's own numeric folder id, for `parentFolderId`. */
+  folderGtmIds?: Record<string, string>;
 }
 
 /** Resolves a tag's `trigger`/`exceptTrigger` logical ids to GTM's `firingTriggerId`/`blockingTriggerId`. */
@@ -36,6 +38,22 @@ export function toGtmPayload(
   resourceId: string,
   desiredState: Record<string, unknown>,
   context: MappingContext = {},
+): GtmObject {
+  if (kind === 'folder') {
+    return { name: resourceId };
+  }
+
+  const payload = toGtmPayloadByType(kind, resourceId, desiredState, context);
+  const folder = desiredState.folder as string | undefined;
+  const parentFolderId = folder ? context.folderGtmIds?.[folder] : undefined;
+  return parentFolderId ? { ...payload, parentFolderId } : payload;
+}
+
+function toGtmPayloadByType(
+  kind: GtmKind,
+  resourceId: string,
+  desiredState: Record<string, unknown>,
+  context: MappingContext,
 ): GtmObject {
   const type = String(desiredState.type);
 
@@ -122,9 +140,22 @@ export function toGtmPayload(
 export interface ReverseMappingContext {
   /** GTM's own numeric trigger id -> our logical trigger id, to recover a tag's `trigger` list. */
   triggerGtmIdToLogicalId?: Record<string, string>;
+  /** GTM's own numeric folder id -> our logical folder id, to recover a resource's `folder`. */
+  folderGtmIdToLogicalId?: Record<string, string>;
 }
 
 export function fromGtmPayload(kind: GtmKind, object: GtmObject, context: ReverseMappingContext = {}): Record<string, unknown> {
+  if (kind === 'folder') {
+    return { name: object.name };
+  }
+
+  const desiredState = fromGtmPayloadByType(kind, object, context);
+  const parentFolderId = object.parentFolderId as string | undefined;
+  const folder = parentFolderId ? context.folderGtmIdToLogicalId?.[parentFolderId] : undefined;
+  return folder ? { ...desiredState, folder } : desiredState;
+}
+
+function fromGtmPayloadByType(kind: GtmKind, object: GtmObject, context: ReverseMappingContext): Record<string, unknown> {
   const parameter = (object.parameter ?? []) as GtmParam[];
   const param = (key: string): string | undefined => parameter.find((p) => p.key === key)?.value;
 

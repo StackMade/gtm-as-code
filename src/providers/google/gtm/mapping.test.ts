@@ -8,6 +8,27 @@ test('dataLayerVariable maps to GTM "v" type and back', () => {
   assert.deepEqual(fromGtmPayload('variable', gtm), { type: 'dataLayerVariable', variableName: 'form' });
 });
 
+test('folder maps to a bare GTM object and back', () => {
+  const gtm = toGtmPayload('folder', 'consent', {});
+  assert.deepEqual(gtm, { name: 'consent' });
+  assert.deepEqual(fromGtmPayload('folder', gtm), { name: 'consent' });
+});
+
+test('a resource with a folder gets parentFolderId resolved from context, and recovered back', () => {
+  const gtm = toGtmPayload(
+    'variable',
+    'form',
+    { type: 'dataLayerVariable', variableName: 'form', folder: 'consent' },
+    { folderGtmIds: { consent: '99' } },
+  );
+  assert.equal(gtm.parentFolderId, '99');
+  assert.deepEqual(fromGtmPayload('variable', gtm, { folderGtmIdToLogicalId: { '99': 'consent' } }), {
+    type: 'dataLayerVariable',
+    variableName: 'form',
+    folder: 'consent',
+  });
+});
+
 test('customEvent trigger maps to GTM customEventFilter and back', () => {
   const gtm = toGtmPayload('trigger', 'generate_lead', { type: 'customEvent', eventName: 'generate_lead' });
   assert.equal(gtm.type, 'customEvent');

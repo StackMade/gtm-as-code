@@ -11,7 +11,7 @@ function baseConfig(overrides: Partial<AnalyticsConfig>): AnalyticsConfig {
     project: { name: 'test' },
     google: { gtm: { accountId: '1', containerId: '1' }, ga4: { propertyId: '1' } },
     events: {},
-    gtm: { variables: {}, triggers: {}, tags: {}, builtInVariables: [] },
+    gtm: { variables: {}, triggers: {}, tags: {}, folders: {}, builtInVariables: [] },
     ga4: { dimensions: {}, metrics: {}, keyEvents: {} },
     ...overrides,
   };
@@ -68,6 +68,7 @@ test('explicit gtm primitive with the same id as a derived one wins (escape hatc
       variables: { form: { type: 'dataLayerVariable', variableName: 'form', defaultValue: 'n/a' } },
       triggers: {},
       tags: {},
+      folders: {},
       builtInVariables: [],
     },
   });

@@ -9,7 +9,7 @@ function baseConfig(overrides: Partial<AnalyticsConfig['gtm']>): AnalyticsConfig
     project: { name: 'test' },
     google: { gtm: { accountId: '1', containerId: '1' }, ga4: { propertyId: '1' } },
     events: {},
-    gtm: { variables: {}, triggers: {}, tags: {}, builtInVariables: [], ...overrides },
+    gtm: { variables: {}, triggers: {}, tags: {}, folders: {}, builtInVariables: [], ...overrides },
     ga4: { dimensions: {}, metrics: {}, keyEvents: {} },
   };
 }

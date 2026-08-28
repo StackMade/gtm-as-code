@@ -17,6 +17,8 @@ export interface EventDef {
 
 export interface ResourceDef {
   type: string;
+  /** Folder name (from `gtm.folders`) this resource is organized under. */
+  folder?: string;
   [key: string]: unknown;
 }
 
@@ -49,6 +51,7 @@ export interface AnalyticsConfig {
     variables: Record<string, ResourceDef>;
     triggers: Record<string, ResourceDef>;
     tags: Record<string, TagDef>;
+    folders: Record<string, unknown>;
     builtInVariables: string[];
   };
   ga4: {
@@ -196,11 +199,12 @@ function validateParameters(
 
 function validateGtm(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['gtm'] {
   const container = requireObject(parsed, raw, ['gtm']);
-  checkUnknownKeys(parsed, container, ['variables', 'triggers', 'tags', 'builtInVariables'], ['gtm']);
+  checkUnknownKeys(parsed, container, ['variables', 'triggers', 'tags', 'folders', 'builtInVariables'], ['gtm']);
   return {
     variables: validateResourceMap(parsed, container.variables ?? {}, ['gtm', 'variables']),
     triggers: validateResourceMap(parsed, container.triggers ?? {}, ['gtm', 'triggers']),
     tags: validateTagMap(parsed, container.tags ?? {}, ['gtm', 'tags']),
+    folders: requireObject(parsed, container.folders ?? {}, ['gtm', 'folders']),
     builtInVariables: validateBuiltInVariables(parsed, container.builtInVariables ?? [], ['gtm', 'builtInVariables']),
   };
 }
@@ -231,7 +235,8 @@ function validateResourceMap(
     const itemPath = [...path, name];
     const def = requireObject(parsed, value, itemPath);
     const type = requireString(parsed, def.type, [...itemPath, 'type']);
-    result[name] = { ...def, type };
+    const folder = def.folder !== undefined ? requireString(parsed, def.folder, [...itemPath, 'folder']) : undefined;
+    result[name] = { ...def, type, folder };
   }
   return result;
 }
@@ -251,7 +256,8 @@ function validateTagMap(parsed: ParsedConfig, raw: unknown, path: string[]): Rec
       def.exceptTrigger !== undefined
         ? requireStringArray(parsed, def.exceptTrigger, [...itemPath, 'exceptTrigger'])
         : undefined;
-    result[name] = { ...def, type, trigger, exceptTrigger };
+    const folder = def.folder !== undefined ? requireString(parsed, def.folder, [...itemPath, 'folder']) : undefined;
+    result[name] = { ...def, type, trigger, exceptTrigger, folder };
   }
   return result;
 }
@@ -328,6 +334,7 @@ function checkCrossReferences(
   for (const name of Object.keys(gtm.variables)) record(name, `gtm.variables.${name}`, ['gtm', 'variables', name]);
   for (const name of Object.keys(gtm.triggers)) record(name, `gtm.triggers.${name}`, ['gtm', 'triggers', name]);
   for (const name of Object.keys(gtm.tags)) record(name, `gtm.tags.${name}`, ['gtm', 'tags', name]);
+  for (const name of Object.keys(gtm.folders)) record(name, `gtm.folders.${name}`, ['gtm', 'folders', name]);
   for (const name of Object.keys(ga4.dimensions)) record(name, `ga4.dimensions.${name}`, ['ga4', 'dimensions', name]);
   for (const name of Object.keys(ga4.metrics)) record(name, `ga4.metrics.${name}`, ['ga4', 'metrics', name]);
 
@@ -340,6 +347,22 @@ function checkCrossReferences(
           if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
           fail(parsed, ['gtm', 'tags', name, field], body);
         }
+      }
+    }
+  }
+
+  for (const [section, defs] of [
+    ['variables', gtm.variables],
+    ['triggers', gtm.triggers],
+    ['tags', gtm.tags],
+  ] as const) {
+    for (const [name, def] of Object.entries(defs)) {
+      if (def.folder === undefined) continue;
+      if (!(def.folder in gtm.folders)) {
+        const suggestion = closestMatch(def.folder, Object.keys(gtm.folders));
+        const body = [{ label: 'Unknown folder', value: def.folder }];
+        if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
+        fail(parsed, ['gtm', section, name, 'folder'], body);
       }
     }
   }

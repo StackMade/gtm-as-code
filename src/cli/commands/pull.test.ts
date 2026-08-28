@@ -51,7 +51,7 @@ test('parseResourceArg rejects an empty id', () => {
 });
 
 function countsWith(overrides: Partial<FoundCounts> = {}): FoundCounts {
-  return { variables: 0, triggers: 0, tags: 0, dimensions: 0, metrics: 0, keyEvents: 0, skipped: 0, ...overrides };
+  return { folders: 0, variables: 0, triggers: 0, tags: 0, dimensions: 0, metrics: 0, keyEvents: 0, skipped: 0, ...overrides };
 }
 
 test('buildFoundSummary reports one line per kind in PRD order', () => {
@@ -62,6 +62,7 @@ test('buildFoundSummary reports one line per kind in PRD order', () => {
     '  18 tags',
     '  22 triggers',
     '  15 variables',
+    '  0 folders',
     '  7 custom dimensions',
     '  0 custom metrics',
     '  3 key events',

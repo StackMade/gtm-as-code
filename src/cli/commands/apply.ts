@@ -14,7 +14,7 @@ import { WorkspaceConflictError } from '../../providers/google/gtm/errors.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
 
-const GTM_KIND_ORDER: GtmKind[] = ['variable', 'trigger', 'tag'];
+const GTM_KIND_ORDER: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
 const GA4_UPDATE_MASK: Record<Ga4Kind, string[]> = {
   dimension: ['displayName'],
   metric: ['displayName'],
@@ -73,6 +73,7 @@ async function execute(result: PlanResult): Promise<void> {
   const { changes, config, compiled, gtm, ga4, statePath } = result;
   let state = await readState(statePath);
   const triggerGtmIds = invert(result.triggerGtmIdToLogicalId);
+  const folderGtmIds = invert(result.folderGtmIdToLogicalId);
 
   // Enabled first: tags/triggers created below may reference these by name.
   await gtm.enableBuiltInVariables(result.builtInVariablesToEnable);
@@ -113,10 +114,14 @@ async function execute(result: PlanResult): Promise<void> {
     const payload = toGtmPayload(kind, change.resource.id, change.resource.desiredState as Record<string, unknown>, {
       measurementId: config.google.ga4.measurementId,
       triggerGtmIds,
+      folderGtmIds,
     });
     const created = await gtm.create(kind, change.resource.id, payload);
     const gtmId = created[gtmIdField(kind)];
-    if (kind === 'trigger' && typeof gtmId === 'string') triggerGtmIds[change.resource.id] = gtmId;
+    if (typeof gtmId === 'string') {
+      if (kind === 'trigger') triggerGtmIds[change.resource.id] = gtmId;
+      if (kind === 'folder') folderGtmIds[change.resource.id] = gtmId;
+    }
   }
   for (const change of ga4Changes.filter(isCreate)) {
     const kind = ga4KindOf(change.resource.type);
@@ -136,6 +141,7 @@ async function execute(result: PlanResult): Promise<void> {
       const payload = toGtmPayload(kind, id, change.after.desiredState as Record<string, unknown>, {
         measurementId: config.google.ga4.measurementId,
         triggerGtmIds,
+        folderGtmIds,
       });
       await gtm.update(kind, id, gtmId, payload);
     }
@@ -150,7 +156,7 @@ async function execute(result: PlanResult): Promise<void> {
 }
 
 function groupGtm(changes: Change[]): Record<GtmKind, Change[]> {
-  const groups: Record<GtmKind, Change[]> = { variable: [], trigger: [], tag: [] };
+  const groups: Record<GtmKind, Change[]> = { folder: [], variable: [], trigger: [], tag: [] };
   for (const change of changes) {
     const type = resourceOf(change).type;
     if (!type.startsWith('gtm.')) continue;

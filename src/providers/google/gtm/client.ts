@@ -19,6 +19,7 @@ export interface GtmVersionRef {
 }
 
 const KINDS = {
+  folder: { collection: 'folders', field: 'folder', idField: 'folderId', type: 'gtm.folder' },
   variable: { collection: 'variables', field: 'variable', idField: 'variableId', type: 'gtm.variable' },
   trigger: { collection: 'triggers', field: 'trigger', idField: 'triggerId', type: 'gtm.trigger' },
   tag: { collection: 'tags', field: 'tag', idField: 'tagId', type: 'gtm.tag' },
@@ -26,8 +27,8 @@ const KINDS = {
 
 export type GtmKind = keyof typeof KINDS;
 
-/** GTM's own id field name for a kind's objects (`variableId`/`triggerId`/`tagId`). */
-export function gtmIdField(kind: GtmKind): 'variableId' | 'triggerId' | 'tagId' {
+/** GTM's own id field name for a kind's objects (`folderId`/`variableId`/`triggerId`/`tagId`). */
+export function gtmIdField(kind: GtmKind): 'folderId' | 'variableId' | 'triggerId' | 'tagId' {
   return KINDS[kind].idField;
 }
 

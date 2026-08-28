@@ -79,7 +79,7 @@ export function compileEvents(config: AnalyticsConfig, file: string): AnalyticsC
 
   return {
     ...config,
-    gtm: { variables, triggers, tags, builtInVariables: config.gtm.builtInVariables },
+    gtm: { variables, triggers, tags, folders: config.gtm.folders, builtInVariables: config.gtm.builtInVariables },
     ga4: { ...config.ga4, dimensions, keyEvents },
   };
 }
@@ -99,6 +99,7 @@ export function toResources(config: AnalyticsConfig): Resource[] {
     resources.push({ id, type, provider: 'google', desiredState });
   };
 
+  for (const [id, def] of Object.entries(config.gtm.folders)) push(id, 'gtm.folder', def);
   for (const [id, def] of Object.entries(config.gtm.variables)) push(id, 'gtm.variable', def);
   for (const [id, def] of Object.entries(config.gtm.triggers)) push(id, 'gtm.trigger', def);
   for (const [id, def] of Object.entries(config.gtm.tags)) push(id, 'gtm.tag', def);
