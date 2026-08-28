@@ -209,11 +209,12 @@ gtm:
 
 ga4:
   dimensions:
-    <name>: { scope: event | user, parameter: string }
+    <name>: { scope: event | user, parameter: string, protected: boolean }
   metrics:
-    <name>: { scope: event | user, parameter: string, measurementUnit: string }  # measurementUnit optional
+    <name>: { scope: event | user, parameter: string, measurementUnit: string, protected: boolean }
+      # measurementUnit optional
   keyEvents:
-    <name>: {}
+    <name>: { protected: boolean }
 ```
 
 Only `type` (and, for tags, `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`) is
@@ -300,9 +301,9 @@ is archived rather than hard-deleted (key events are hard-deleted); `plan` print
 
 A resource marked `protected: true` in config needs `--allow-destroy-protected` on top of
 `--allow-destroy` before `apply` deletes it, even if `--allow-destroy` alone would otherwise cover
-the rest of the plan. This only works for GTM resources today: the flag is checked against
-ownership metadata GTM stores in the resource's own `notes` field, and GA4 has no equivalent field
-to stamp it into.
+the rest of the plan. GTM resources carry the flag in their own `notes` field, alongside the
+existing ownership metadata; GA4 has no such field, so its flag lives in `.analytics/state.json`
+instead (see [State](#state)).
 
 ### `gtm-code publish`
 
@@ -343,9 +344,10 @@ instead, with no live write. Prompts `Continue? [y/N]` before writing either way
 ## State
 
 `.analytics/state.json` is created and updated automatically by `plan` and `apply`. It tracks which
-GA4 resources this tool owns. GTM ownership is tracked differently, via a `notes` field this tool
-writes onto each GTM object it manages. Resources not tracked as managed are never touched or
-deleted.
+GA4 resources this tool owns, plus which of them are `protected: true` (its `protectedResources`
+field). GTM ownership, and its own `protected` flag, are tracked differently, via a `notes` field
+this tool writes onto each GTM object it manages. Resources not tracked as managed are never
+touched or deleted.
 
 `apply` holds an exclusive lock (`.analytics/state.json.lock`) for the duration of the run. Two
 concurrent `apply`s against the same state file can't interleave writes: the second one fails fast
@@ -473,8 +475,6 @@ Not available yet. These are known gaps, so please don't file a bug for them:
 - GTM custom templates; conversion linker and community-gallery template tags (their payloads need
   fields, like Floodlight ids or a gallery template's own parameter schema, this tool can't
   live-verify against a sandbox container). See [Schema](#schema) for what is covered
-- Protected resources only cover GTM; GA4 dimensions/metrics/key events have no field to persist
-  the flag against, so removing one from config still deletes it outright
 - GA4 data streams, enhanced measurement, audiences, and property settings
 
 There is deliberately no `action.yml` in this repository. The GitHub Action ships from

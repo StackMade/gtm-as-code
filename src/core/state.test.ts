@@ -4,7 +4,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { writeFile } from 'node:fs/promises';
-import { emptyState, findManagedId, forgetManaged, readState, recordManaged, stateKey, writeState, StateVersionError } from './state.js';
+import {
+  emptyState,
+  findManagedId,
+  forgetManaged,
+  isProtected,
+  readState,
+  recordManaged,
+  setProtected,
+  stateKey,
+  writeState,
+  StateVersionError,
+} from './state.js';
 
 test('recordManaged then findManagedId recovers the resource id', () => {
   const key = stateKey('google', 'ga4.dimension', '123456789', 'lead_type');
@@ -32,6 +43,29 @@ test('forgetManaged removes the entry', () => {
   const withoutEntry = forgetManaged(withEntry, key);
 
   assert.deepEqual(withoutEntry.resources, {});
+});
+
+test('setProtected then isProtected round-trips', () => {
+  const key = stateKey('google', 'ga4.dimension', '123456789', 'lead_type');
+  const state = setProtected(recordManaged(emptyState(), key, 'properties/123456789/customDimensions/123'), key, true);
+
+  assert.equal(isProtected(state, key), true);
+});
+
+test('setProtected(false) clears a previously protected resource', () => {
+  const key = stateKey('google', 'ga4.dimension', '123456789', 'lead_type');
+  const protectedState = setProtected(emptyState(), key, true);
+  const unprotectedState = setProtected(protectedState, key, false);
+
+  assert.equal(isProtected(unprotectedState, key), false);
+});
+
+test('forgetManaged also clears the protected flag, so a re-created resource starts unprotected', () => {
+  const key = stateKey('google', 'ga4.keyEvent', '123456789', 'generate_lead');
+  const state = setProtected(recordManaged(emptyState(), key, 'properties/123456789/keyEvents/456'), key, true);
+  const forgotten = forgetManaged(state, key);
+
+  assert.equal(isProtected(forgotten, key), false);
 });
 
 test('readState returns an empty state when the file does not exist', async () => {

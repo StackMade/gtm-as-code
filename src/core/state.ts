@@ -9,6 +9,9 @@ import { dirname } from 'node:path';
 export interface StateFile {
   version: 1;
   resources: Record<string, string>;
+  /** State keys (same keys as `resources`) marked `protected: true` in config. GA4 has no field of
+   *  its own to stamp this into, unlike GTM's `notes` (see `ownership.ts`), so it lives here. */
+  protectedResources?: string[];
 }
 
 /** Bump when the `resources` shape changes, and add a migration in `readState`. */
@@ -40,7 +43,18 @@ export function recordManaged(state: StateFile, key: string, externalId: string)
 export function forgetManaged(state: StateFile, key: string): StateFile {
   const resources = { ...state.resources };
   delete resources[key];
-  return { ...state, resources };
+  const protectedResources = (state.protectedResources ?? []).filter((k) => k !== key);
+  return { ...state, resources, protectedResources };
+}
+
+/** Records or clears the `protected` flag for a resource already tracked by `recordManaged`. */
+export function setProtected(state: StateFile, key: string, isProtected: boolean): StateFile {
+  const withoutKey = (state.protectedResources ?? []).filter((k) => k !== key);
+  return { ...state, protectedResources: isProtected ? [...withoutKey, key] : withoutKey };
+}
+
+export function isProtected(state: StateFile, key: string): boolean {
+  return (state.protectedResources ?? []).includes(key);
 }
 
 /** Reverse-looks-up the resource id for an external identifier under a given provider/type/scope prefix. */

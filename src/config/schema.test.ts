@@ -107,6 +107,26 @@ gtm:
   assert.equal(config.gtm.tags.checkout_pixel.protected, true);
 });
 
+test('a GA4 dimension can be marked protected: true', () => {
+  const yaml = `
+ga4:
+  dimensions:
+    lead_type: { scope: event, parameter: lead_type, protected: true }
+`;
+  const config = validate(yaml);
+  assert.equal(config.ga4.dimensions.lead_type.protected, true);
+});
+
+test('a GA4 metric can be marked protected: true', () => {
+  const yaml = `
+ga4:
+  metrics:
+    lead_value: { scope: event, parameter: value, protected: true }
+`;
+  const config = validate(yaml);
+  assert.equal(config.ga4.metrics.lead_value.protected, true);
+});
+
 test('protected must be a boolean', () => {
   const yaml = `
 gtm:

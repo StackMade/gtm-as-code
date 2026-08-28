@@ -1,6 +1,6 @@
 import type { AuthClient } from 'google-auth-library';
 import type { Resource } from '../../../core/resource.js';
-import { findManagedId, stateKey, type StateFile } from '../../../core/state.js';
+import { findManagedId, isProtected, stateKey, type StateFile } from '../../../core/state.js';
 import { Ga4ApiError, extractApiStatus } from './errors.js';
 
 const BASE_URL = 'https://analyticsadmin.googleapis.com/v1beta';
@@ -79,7 +79,8 @@ export class Ga4Client {
       if (!object.name) continue;
       const resourceId = findManagedId(state, 'google', KINDS[kind].type, this.propertyId, String(object.name));
       if (resourceId === null) continue;
-      resources.push({ id: resourceId, type: KINDS[kind].type, provider: 'google', desiredState: object });
+      const desiredState = isProtected(state, this.stateKeyFor(kind, resourceId)) ? { ...object, __protected: true } : object;
+      resources.push({ id: resourceId, type: KINDS[kind].type, provider: 'google', desiredState });
     }
     return resources;
   }

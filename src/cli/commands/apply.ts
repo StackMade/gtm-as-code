@@ -1,7 +1,7 @@
 import { computePlan, type PlanResult } from './plan.js';
 import { confirm } from '../confirm.js';
 import { buildDependencyGraph } from '../../core/graph.js';
-import { writeState, recordManaged, forgetManaged, readState } from '../../core/state.js';
+import { writeState, recordManaged, forgetManaged, setProtected, readState } from '../../core/state.js';
 import { withStateLock } from '../../core/lock.js';
 import type { Change, Resource } from '../../core/resource.js';
 import { SCOPES } from '../../providers/google/auth/index.js';
@@ -146,7 +146,9 @@ async function execute(result: PlanResult): Promise<void> {
     const payload = toGa4Payload(kind, change.resource.id, change.resource.desiredState as Record<string, unknown>);
     const created = await ga4.create(kind, payload);
     if (created.name) {
-      state = recordManaged(state, ga4.stateKeyFor(kind, change.resource.id), created.name);
+      const key = ga4.stateKeyFor(kind, change.resource.id);
+      state = recordManaged(state, key, created.name);
+      if ((change.resource.desiredState as Record<string, unknown>).protected === true) state = setProtected(state, key, true);
       await writeState(statePath, state);
     }
   }
@@ -171,6 +173,9 @@ async function execute(result: PlanResult): Promise<void> {
     if (!name) continue;
     const payload = toGa4Payload(kind, change.after.id, change.after.desiredState as Record<string, unknown>);
     await ga4.update(kind, name, payload, GA4_UPDATE_MASK[kind]);
+    const key = ga4.stateKeyFor(kind, change.after.id);
+    state = setProtected(state, key, (change.after.desiredState as Record<string, unknown>).protected === true);
+    await writeState(statePath, state);
   }
 }
 

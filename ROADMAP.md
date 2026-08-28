@@ -183,7 +183,14 @@ be expressed at all. Ordered within the milestone by how many containers each un
   and topologically ordered before the resources that reference it, same as any other kind.
   Covered end to end: schema validation, dependency graph, apply, pull, and export-ingest.
 - Custom templates. Managing template code as files in the repo, which is where sandboxed JavaScript
-  belongs anyway. Not started.
+  belongs anyway. **Blocked, not a skipped-on-purpose gap like conversion linker.** The `templates`
+  collection itself works fine (live-verified: `POST .../templates` with a `templateData` string in
+  GTM's own `.tpl` export format returns a `templateId`), but attaching a tag to a template failed
+  every combination tried: `type` set to the template's declared `___INFO___.id`, to
+  `cvt_<accountId>_<containerId>_<templateId>`, and a `vendorTemplate.key.publicId` field, all
+  rejected with `vendorTemplate.key: Unknown entity type`. The real linkage GTM's UI produces isn't
+  reproducible from a `.tpl` file's declared fields alone; needs either a real UI-exported example
+  tag payload to compare against, or GTM support docs this session didn't have access to.
 
 ## 0.5: Consent Mode v2 and governance
 
@@ -207,11 +214,11 @@ rather read a diff than click through 40 tags.
   personal data (`email`, `phone`, `address`, `ssn`, `password`, and more; see `PII_NAME_PATTERNS`
   in `src/config/schema.ts`). A substring list is a heuristic, not a guarantee: it won't catch every
   PII-shaped name, and it can flag a legitimate name that happens to contain one of the patterns.
-- Protected resources. **Done for GTM.** `protected: true` on a `gtm.variables`/`triggers`/`tags`
-  entry is stamped into GTM's `notes` field alongside ownership metadata, so it survives even after
-  the resource is removed from config. Deleting it then needs `--allow-destroy-protected` in
-  addition to `--allow-destroy`. GA4 resources have no equivalent field to persist the flag into, so
-  they aren't covered.
+- Protected resources. **Done.** `protected: true` on a `gtm.variables`/`triggers`/`tags` entry is
+  stamped into GTM's `notes` field alongside ownership metadata, so it survives even after the
+  resource is removed from config. `ga4.dimensions`/`metrics`/`keyEvents` have no equivalent field,
+  so their flag lives in `.analytics/state.json`'s `protectedResources` list instead. Either way,
+  deleting a protected resource needs `--allow-destroy-protected` in addition to `--allow-destroy`.
 
 ## 0.6: the tracking plan as a product
 

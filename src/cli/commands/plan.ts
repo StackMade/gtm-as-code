@@ -127,7 +127,9 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     for (const resource of managed) {
       const object = resource.desiredState as Ga4Object;
       if (object.name) ga4Names[`${kind}:${resource.id}`] = object.name;
-      remote.push({ ...resource, desiredState: fromGa4Payload(kind, object) });
+      const desiredState = fromGa4Payload(kind, object);
+      if (object.__protected) desiredState.protected = true;
+      remote.push({ ...resource, desiredState });
     }
   }
 

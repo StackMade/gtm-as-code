@@ -47,12 +47,14 @@ export interface TagDef extends ResourceDef {
 export interface DimensionDef {
   scope: 'event' | 'user';
   parameter: string;
+  protected?: boolean;
 }
 
 export interface MetricDef {
   scope: 'event' | 'user';
   parameter: string;
   measurementUnit?: string;
+  protected?: boolean;
 }
 
 export interface AnalyticsConfig {
@@ -83,8 +85,8 @@ const TOP_LEVEL_KEYS = ['version', 'project', 'google', 'events', 'gtm', 'ga4'];
 const EVENT_KEYS = ['description', 'keyEvent', 'parameters', 'consent'];
 const PARAMETER_KEYS = ['type', 'dimension', 'optional'];
 const PARAMETER_TYPES = ['string', 'number', 'boolean'] as const;
-const DIMENSION_KEYS = ['scope', 'parameter'];
-const METRIC_KEYS = ['scope', 'parameter', 'measurementUnit'];
+const DIMENSION_KEYS = ['scope', 'parameter', 'protected'];
+const METRIC_KEYS = ['scope', 'parameter', 'measurementUnit', 'protected'];
 const SCOPES = ['event', 'user'] as const;
 
 export function validateConfig(parsed: ParsedConfig): AnalyticsConfig {
@@ -346,7 +348,8 @@ function validateDimensions(
     checkUnknownKeys(parsed, def, DIMENSION_KEYS, itemPath);
     const scope = requireEnum(parsed, def.scope, SCOPES, [...itemPath, 'scope']);
     const parameter = requireString(parsed, def.parameter, [...itemPath, 'parameter']);
-    result[name] = { scope, parameter };
+    const isProtected = def.protected !== undefined ? requireBoolean(parsed, def.protected, [...itemPath, 'protected']) : undefined;
+    result[name] = { scope, parameter, ...(isProtected !== undefined ? { protected: isProtected } : {}) };
   }
   return result;
 }
@@ -368,7 +371,8 @@ function validateMetrics(
       def.measurementUnit !== undefined
         ? requireString(parsed, def.measurementUnit, [...itemPath, 'measurementUnit'])
         : undefined;
-    result[name] = { scope, parameter, measurementUnit };
+    const isProtected = def.protected !== undefined ? requireBoolean(parsed, def.protected, [...itemPath, 'protected']) : undefined;
+    result[name] = { scope, parameter, measurementUnit, ...(isProtected !== undefined ? { protected: isProtected } : {}) };
   }
   return result;
 }
