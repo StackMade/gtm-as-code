@@ -1,5 +1,24 @@
 # @stackmade/gtm-as-code
 
+## 0.5.0
+
+### Minor Changes
+
+- 052149c: Extend protected resources to GA4. `protected: true` on a `ga4.dimensions`/`metrics`/`keyEvents`
+  entry now needs `--allow-destroy-protected` before `apply` deletes it, tracked in
+  `.analytics/state.json` since GA4 has no field of its own to stamp the flag into (GTM resources
+  already worked this way).
+- 694b6b8: Add consent settings, consent/PII validation, and protected resources.
+
+  - `gtm.tags.*.consent` and `events.*.consent` map to GTM's per-tag `consentSettings`, and a bare
+    `consentInit` trigger type is now supported for firing a default-consent tag before everything
+    else.
+  - Validation now fails when a `ga4Event`/`googleTag` tag, or an `events.*` entry (which compiles
+    to one), has no `consent` block, and when an event parameter name suggests personal data
+    (`email`, `phone`, `address`, and similar).
+  - `protected: true` on a GTM resource requires `--allow-destroy-protected`, on top of
+    `--allow-destroy`, before `apply` deletes it. GA4 resources aren't covered yet.
+
 ## 0.4.0
 
 ### Minor Changes
