@@ -9,6 +9,7 @@ import { readState } from '../../core/state.js';
 import { authorize, SCOPES } from '../../providers/google/auth/index.js';
 import { GtmClient, resolveWorkspaceId, gtmIdField, type GtmKind, type GtmObject } from '../../providers/google/gtm/client.js';
 import { fromGtmPayload } from '../../providers/google/gtm/mapping.js';
+import { BUILT_IN_VARIABLES } from '../../providers/google/gtm/builtin-variables.js';
 import { Ga4Client, type Ga4Kind, type Ga4Object } from '../../providers/google/ga4/client.js';
 import { fromGa4Payload } from '../../providers/google/ga4/mapping.js';
 import { printFailure } from '../failure.js';
@@ -40,6 +41,8 @@ export interface PlanResult {
   /** `${kind}:${logicalId}` -> GA4's full resource `name`, for update/delete. */
   ga4Names: Record<string, string>;
   triggerGtmIdToLogicalId: Record<string, string>;
+  /** Built-in variables declared in config but not yet enabled remotely. Additive only — never disabled by `apply`. */
+  builtInVariablesToEnable: string[];
 }
 
 /** Read-only by design: `*Readonly` scopes and `listManaged` only, never create/update/delete. */
@@ -47,7 +50,7 @@ export async function plan(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmReadonly, SCOPES.ga4Readonly]);
     render(result, opts.format);
-    if (result.changes.length > 0) process.exitCode = 2;
+    if (result.changes.length > 0 || result.builtInVariablesToEnable.length > 0) process.exitCode = 2;
   } catch (error) {
     printFailure(error);
     process.exitCode = 1;
@@ -87,7 +90,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
 
   // Triggers had to be read first — reverse trigger mapping needs them — but nothing
   // below depends on anything else here, so the remaining listings go out together.
-  const [gtmManaged, ga4Managed] = await Promise.all([
+  const [gtmManaged, ga4Managed, enabledBuiltInVariables] = await Promise.all([
     Promise.all(
       GTM_KINDS.map(async (kind) => ({
         kind,
@@ -95,7 +98,12 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
       })),
     ),
     Promise.all(GA4_KINDS.map(async (kind) => ({ kind, resources: await ga4.listManaged(kind, state) }))),
+    gtm.listEnabledBuiltInVariables(),
   ]);
+
+  const builtInVariablesToEnable = config.gtm.builtInVariables
+    .map((name) => BUILT_IN_VARIABLES[name])
+    .filter((type) => !enabledBuiltInVariables.includes(type));
 
   for (const { kind, resources: managed } of gtmManaged) {
     for (const resource of managed) {
@@ -121,7 +129,19 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
   const counts = { create: 0, update: 0, delete: 0 };
   for (const change of changes) counts[change.operation]++;
 
-  return { changes, counts, config, compiled, gtm, ga4, statePath, gtmIds, ga4Names, triggerGtmIdToLogicalId };
+  return {
+    changes,
+    counts,
+    config,
+    compiled,
+    gtm,
+    ga4,
+    statePath,
+    gtmIds,
+    ga4Names,
+    triggerGtmIdToLogicalId,
+    builtInVariablesToEnable,
+  };
 }
 
 function render(result: PlanResult, format: GlobalOptions['format']): void {
@@ -134,6 +154,7 @@ export interface PlanJson {
   hasChanges: boolean;
   counts: PlanResult['counts'];
   changes: Array<{ operation: Change['operation']; type: string; id: string }>;
+  builtInVariablesToEnable?: string[];
 }
 
 /** Only the fields these renderers need — lets `diff`/`drift` reuse them without a full `PlanResult`. */
@@ -175,14 +196,35 @@ export function buildPlanMarkdown({ changes, counts }: ChangeSummary): string {
 }
 
 function renderJson(result: PlanResult): void {
-  console.log(JSON.stringify(buildPlanJson(result), null, 2));
+  console.log(JSON.stringify(planJsonWithBuiltIns(result), null, 2));
 }
 
 function renderMarkdown(result: PlanResult): void {
-  console.log(buildPlanMarkdown(result));
+  console.log(planMarkdownWithBuiltIns(result));
 }
 
-function renderText({ changes, counts }: PlanResult): void {
+/** `buildPlanJson`/`buildPlanMarkdown` only know `ChangeSummary` — this adds the built-in-variable
+ *  gap on top, shared by `plan` and `drift`, the two commands that fetch it via `computePlan`. */
+export function planJsonWithBuiltIns(result: PlanResult): PlanJson {
+  const json = buildPlanJson(result);
+  if (result.builtInVariablesToEnable.length > 0) json.builtInVariablesToEnable = builtInVariableNames(result.builtInVariablesToEnable);
+  return json;
+}
+
+export function planMarkdownWithBuiltIns(result: PlanResult): string {
+  const lines = [buildPlanMarkdown(result)];
+  if (result.builtInVariablesToEnable.length > 0) {
+    lines.push('', `Built-in variables to enable: ${builtInVariableNames(result.builtInVariablesToEnable).join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
+export function builtInVariableNames(types: string[]): string[] {
+  const byType = Object.fromEntries(Object.entries(BUILT_IN_VARIABLES).map(([name, type]) => [type, name]));
+  return types.map((type) => byType[type] ?? type);
+}
+
+function renderText({ changes, counts, builtInVariablesToEnable }: PlanResult): void {
   console.log('GTM as Code\n');
 
   for (const { header, prefix, showAction } of [
@@ -199,6 +241,12 @@ function renderText({ changes, counts }: PlanResult): void {
       if (change.operation === 'update') printFieldDiff(change.before.desiredState, change.after.desiredState);
     }
     for (const change of section.filter((c) => c.operation === 'delete')) printLine('-', 'delete', change, showAction);
+    console.log('');
+  }
+
+  if (builtInVariablesToEnable.length > 0) {
+    console.log('Built-in variables\n');
+    for (const name of builtInVariableNames(builtInVariablesToEnable)) console.log(`+ enable            ${name}`);
     console.log('');
   }
 

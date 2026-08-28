@@ -183,6 +183,7 @@ events:
         optional: boolean      # optional
 
 gtm:
+  builtInVariables: [string, ...]  # optional, GTM display names e.g. "Click Text", "Page Path"
   variables:
     <name>: { type: string, ... }
   triggers:
@@ -201,6 +202,12 @@ ga4:
 
 Only `type` (and, for tags, `trigger`) is schema-validated on `gtm.variables`, `gtm.triggers` and
 `gtm.tags` entries today. Per-resource-type property shapes aren't validated yet.
+
+`gtm.builtInVariables` is enable-only: `plan`/`drift` report a name listed but not yet enabled
+remotely, `apply` enables it. Names not in the config are left alone — enabling one by hand in the
+GTM UI is never reported as drift, and `apply` never disables one. Only the click/page/form/error/
+history/debug set is supported today (see `src/providers/google/gtm/builtin-variables.ts` for the
+exact list); scroll depth, element visibility, video, and AMP variables aren't yet.
 
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),

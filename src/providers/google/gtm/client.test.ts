@@ -135,6 +135,47 @@ test('liveVersion returns the live version data', async () => {
   assert.deepEqual(await client.liveVersion(), { containerVersionId: '5', name: 'v5' });
 });
 
+test('listEnabledBuiltInVariables returns the enabled types', async () => {
+  const auth = { request: async () => ({ data: { builtInVariable: [{ type: 'pageUrl' }, { type: 'clickText' }] } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  assert.deepEqual(await client.listEnabledBuiltInVariables(), ['pageUrl', 'clickText']);
+});
+
+test('enableBuiltInVariables posts one repeated `type` param per variable', async () => {
+  const calls: unknown[] = [];
+  const auth = {
+    request: async (options: unknown) => {
+      calls.push(options);
+      return { data: {} };
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  await client.enableBuiltInVariables(['pageUrl', 'clickText']);
+
+  assert.deepEqual(calls, [
+    {
+      url: `https://www.googleapis.com/tagmanager/v2/accounts/${ref.accountId}/containers/${ref.containerId}/workspaces/${ref.workspaceId}/built_in_variables`,
+      method: 'POST',
+      params: [
+        ['type', 'pageUrl'],
+        ['type', 'clickText'],
+      ],
+    },
+  ]);
+});
+
+test('enableBuiltInVariables is a no-op for an empty list', async () => {
+  const auth = { request: async () => assert.fail('should not call the API') };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  await client.enableBuiltInVariables([]);
+});
+
 test('listManaged sees resources that only appear on a later page', async () => {
   const auth = pagingAuth([
     { trigger: [{ triggerId: '1', notes: 'unmanaged' }], nextPageToken: 'page-2' },

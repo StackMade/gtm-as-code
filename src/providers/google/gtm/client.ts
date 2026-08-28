@@ -136,6 +136,37 @@ export class GtmClient {
     }
   }
 
+  private builtInVariablesUrl(): string {
+    const { accountId, containerId, workspaceId } = this.ref;
+    return `${BASE_URL}/accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}/built_in_variables`;
+  }
+
+  /** API `type` values currently enabled in this workspace. */
+  async listEnabledBuiltInVariables(): Promise<string[]> {
+    try {
+      const response = await this.auth.request<{ builtInVariable?: Array<{ type: string }> }>({
+        url: this.builtInVariablesUrl(),
+      });
+      return (response.data.builtInVariable ?? []).map((v) => v.type);
+    } catch (error) {
+      throw new GtmApiError('list built-in variables for', this.ref.containerId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  /** Enables one or more built-in variables by their API `type`. Idempotent — already-enabled types are a no-op. */
+  async enableBuiltInVariables(types: string[]): Promise<void> {
+    if (types.length === 0) return;
+    try {
+      await this.auth.request({
+        url: this.builtInVariablesUrl(),
+        method: 'POST',
+        params: types.map((type) => ['type', type]),
+      });
+    } catch (error) {
+      throw new GtmApiError('enable built-in variables for', this.ref.containerId, extractApiStatus(error), { cause: error });
+    }
+  }
+
   /** Creates a container version from this workspace's current state. Does not publish it. */
   async createVersion(name: string, notes: string): Promise<GtmVersionRef> {
     const { accountId, containerId, workspaceId } = this.ref;

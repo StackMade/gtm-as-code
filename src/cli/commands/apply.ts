@@ -25,7 +25,7 @@ export async function apply(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmEdit, SCOPES.ga4Edit]);
 
-    if (result.changes.length === 0) {
+    if (result.changes.length === 0 && result.builtInVariablesToEnable.length === 0) {
       console.log('No changes.');
       return;
     }
@@ -44,6 +44,7 @@ export async function apply(opts: GlobalOptions): Promise<void> {
     console.log(`${result.counts.create} to create`);
     console.log(`${result.counts.update} to update`);
     console.log(`${result.counts.delete} to delete`);
+    if (result.builtInVariablesToEnable.length > 0) console.log(`${result.builtInVariablesToEnable.length} built-in variable(s) to enable`);
     console.log('');
 
     if (!opts.autoApprove && !(await confirm())) {
@@ -72,6 +73,9 @@ async function execute(result: PlanResult): Promise<void> {
   const { changes, config, compiled, gtm, ga4, statePath } = result;
   let state = await readState(statePath);
   const triggerGtmIds = invert(result.triggerGtmIdToLogicalId);
+
+  // Enabled first: tags/triggers created below may reference these by name.
+  await gtm.enableBuiltInVariables(result.builtInVariablesToEnable);
 
   const gtmChangesByKind = groupGtm(changes);
   const ga4Changes = changes.filter((c) => resourceOf(c).type.startsWith('ga4.'));

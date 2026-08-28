@@ -1,6 +1,7 @@
 import { ConfigError } from './errors.js';
 import { locateLine, type ParsedConfig } from './parser.js';
 import { closestMatch } from './suggest.js';
+import { BUILT_IN_VARIABLE_NAMES } from '../providers/google/gtm/builtin-variables.js';
 
 export interface EventParameterDef {
   type: 'string' | 'number' | 'boolean';
@@ -46,6 +47,7 @@ export interface AnalyticsConfig {
     variables: Record<string, ResourceDef>;
     triggers: Record<string, ResourceDef>;
     tags: Record<string, TagDef>;
+    builtInVariables: string[];
   };
   ga4: {
     dimensions: Record<string, DimensionDef>;
@@ -192,12 +194,26 @@ function validateParameters(
 
 function validateGtm(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['gtm'] {
   const container = requireObject(parsed, raw, ['gtm']);
-  checkUnknownKeys(parsed, container, ['variables', 'triggers', 'tags'], ['gtm']);
+  checkUnknownKeys(parsed, container, ['variables', 'triggers', 'tags', 'builtInVariables'], ['gtm']);
   return {
     variables: validateResourceMap(parsed, container.variables ?? {}, ['gtm', 'variables']),
     triggers: validateResourceMap(parsed, container.triggers ?? {}, ['gtm', 'triggers']),
     tags: validateTagMap(parsed, container.tags ?? {}, ['gtm', 'tags']),
+    builtInVariables: validateBuiltInVariables(parsed, container.builtInVariables ?? [], ['gtm', 'builtInVariables']),
   };
+}
+
+function validateBuiltInVariables(parsed: ParsedConfig, raw: unknown, path: string[]): string[] {
+  const names = requireStringArray(parsed, raw, path);
+  for (const [index, name] of names.entries()) {
+    if (!BUILT_IN_VARIABLE_NAMES.includes(name)) {
+      const suggestion = closestMatch(name, BUILT_IN_VARIABLE_NAMES);
+      const body = [{ label: 'Unknown built-in variable', value: name }];
+      if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
+      fail(parsed, [...path, String(index)], body);
+    }
+  }
+  return names;
 }
 
 // Only `type` (and, for tags, `trigger`) is checked: per-type property shapes belong to the

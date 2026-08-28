@@ -79,7 +79,7 @@ export function compileEvents(config: AnalyticsConfig, file: string): AnalyticsC
 
   return {
     ...config,
-    gtm: { variables, triggers, tags },
+    gtm: { variables, triggers, tags, builtInVariables: config.gtm.builtInVariables },
     ga4: { ...config.ga4, dimensions, keyEvents },
   };
 }

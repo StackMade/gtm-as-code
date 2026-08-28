@@ -1,4 +1,4 @@
-import { computePlan, buildPlanJson, buildPlanMarkdown } from './plan.js';
+import { computePlan, planJsonWithBuiltIns, planMarkdownWithBuiltIns } from './plan.js';
 import { SCOPES } from '../../providers/google/auth/index.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
@@ -13,13 +13,14 @@ import type { GlobalOptions } from '../options.js';
 export async function drift(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmReadonly, SCOPES.ga4Readonly]);
+    const drifted = result.changes.length > 0 || result.builtInVariablesToEnable.length > 0;
 
-    if (opts.format === 'json') console.log(JSON.stringify(buildPlanJson(result), null, 2));
-    else if (opts.format === 'markdown') console.log(buildPlanMarkdown(result));
-    else if (result.changes.length === 0) console.log('No drift.');
-    else console.log(`Drift detected:\n\n${buildPlanMarkdown(result)}`);
+    if (opts.format === 'json') console.log(JSON.stringify(planJsonWithBuiltIns(result), null, 2));
+    else if (opts.format === 'markdown') console.log(planMarkdownWithBuiltIns(result));
+    else if (!drifted) console.log('No drift.');
+    else console.log(`Drift detected:\n\n${planMarkdownWithBuiltIns(result)}`);
 
-    if (result.changes.length > 0) process.exitCode = 1;
+    if (drifted) process.exitCode = 1;
   } catch (error) {
     printFailure(error);
     process.exitCode = 1;

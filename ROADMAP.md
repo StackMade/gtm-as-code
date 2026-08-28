@@ -153,9 +153,10 @@ resolve them and no sandbox available to verify one, see
 Today's coverage is one variable type, one trigger type, two tag types. Most real containers cannot
 be expressed at all. Ordered within the milestone by how many containers each unlocks.
 
-- Built-in variables. Toggle-only, no ownership work. Tags and triggers reference `{{Click Text}}`,
-  `{{Page Path}}` and friends constantly, and without enabling them the rest of the coverage below
-  is half-usable.
+- Built-in variables — **done**. The click/page/form/error/history/debug set (`gtm.builtInVariables`
+  in config), enable-only through `plan`/`apply`/`drift`, no ownership tracking — see the
+  Configuration reference in README. Scroll depth, element visibility, video, and AMP variables are
+  not yet covered.
 - Trigger types. Page view, DOM ready, window loaded, click (all elements and links), form
   submission, scroll depth, element visibility, timer, history change, JavaScript error, custom
   event with regex matching, trigger groups.

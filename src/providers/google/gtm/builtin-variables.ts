@@ -1,0 +1,40 @@
+// GTM UI display name -> Tag Manager API v2 `built_in_variables` enum type.
+// Only the click/page/form/error/history/debug set (task_027 scope) — scroll depth, element
+// visibility, video, and AMP variables are deferred, unverified against a real container.
+export const BUILT_IN_VARIABLES: Record<string, string> = {
+  'Page URL': 'pageUrl',
+  'Page Hostname': 'pageHostname',
+  'Page Path': 'pagePath',
+  Referrer: 'referrer',
+  Event: 'event',
+  'Container ID': 'containerId',
+  'Container Version': 'containerVersion',
+  'Debug Mode': 'debugMode',
+  'Random Number': 'randomNumber',
+  'HTML ID': 'htmlId',
+  'Environment Name': 'environmentName',
+  'Click Element': 'clickElement',
+  'Click Classes': 'clickClasses',
+  'Click ID': 'clickId',
+  'Click Target': 'clickTarget',
+  'Click URL': 'clickUrl',
+  'Click Text': 'clickText',
+  'Form Element': 'formElement',
+  'Form Classes': 'formClasses',
+  'Form ID': 'formId',
+  'Form Target': 'formTarget',
+  'Form URL': 'formUrl',
+  'Error Message': 'errorMessage',
+  'Error URL': 'errorUrl',
+  'Error Line': 'errorLine',
+  'History Source': 'historySource',
+  'New History Fragment': 'newHistoryFragment',
+  'Old History Fragment': 'oldHistoryFragment',
+  'New History State': 'newHistoryState',
+  'Old History State': 'oldHistoryState',
+  'New History URL': 'newHistoryUrl',
+  'Old History URL': 'oldHistoryUrl',
+  'Page Hash': 'pageHash',
+};
+
+export const BUILT_IN_VARIABLE_NAMES = Object.keys(BUILT_IN_VARIABLES);
