@@ -344,6 +344,15 @@ key-event and consent flags, and a parameter table (type, required, custom dimen
 stdout by default; `--out` writes it to a file instead. Runs the same validate/compile pipeline as
 `validate`, so a config that fails to validate fails `docs` too.
 
+### `gtm-code generate [--out <path>]`
+
+Generates typed event helpers from `events:`: a TypeScript `EventName` union, one params interface
+per event, an `EventParams` map, and a `track<E extends EventName>(event: E, params: EventParams[E])`
+function that pushes `{ event, ...params }` onto `window.dataLayer`. A typo in an event name or a
+missing required parameter is a compile error in the consuming app rather than missing data in GA4.
+Prints to stdout by default; `--out` writes it to a file. Runs the same validate/compile pipeline as
+`validate`.
+
 ### `gtm-code adopt <kindAndId>`
 
 Stamps ownership on a resource `pull` already brought into the config, so `plan`/`apply` start

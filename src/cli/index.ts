@@ -12,6 +12,7 @@ import { rollback } from './commands/rollback.js';
 import { pull } from './commands/pull.js';
 import { adopt } from './commands/adopt.js';
 import { docs } from './commands/docs.js';
+import { generate } from './commands/generate.js';
 import type { GlobalOptions } from './options.js';
 
 // package.json is the only place the version is written down; `npm version` bumps it there.
@@ -120,6 +121,15 @@ program
   .action(function (this: Command) {
     const opts = this.opts<{ out?: string }>();
     docs({ ...globalOptions(this), out: opts.out });
+  });
+
+program
+  .command('generate')
+  .description('generate typed event helpers (TypeScript types plus a track() function) from the config')
+  .option('--out <path>', 'write to this file instead of stdout')
+  .action(function (this: Command) {
+    const opts = this.opts<{ out?: string }>();
+    generate({ ...globalOptions(this), out: opts.out });
   });
 
 await program.parseAsync();

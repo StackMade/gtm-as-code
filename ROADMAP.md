@@ -240,8 +240,11 @@ relative to its value, because the data is already there.
   write a file. HTML output dropped from the original scope: Markdown renders fine on GitHub/GitLab
   and in most wikis, and a second output format is easy to add later if someone needs it. Every
   analytics team maintains this by hand in a spreadsheet that is wrong within a month.
-- `gtm-code generate`. Typed event helpers from `events:`: TypeScript types plus a `track()`
-  function, so a typo in an event name is a compile error rather than missing data.
+- `gtm-code generate`. Done. Emits an `EventName` union, one params interface per event, an
+  `EventParams` map, and a `track<E extends EventName>(event, params)` function that pushes
+  `{ event, ...params }` onto `window.dataLayer`. Stdout by default, `--out` to write a file. So a
+  typo in an event name, or a missing required parameter, is a compile error rather than missing
+  data in GA4.
 - Event packs. GA4 recommended events, and ecommerce in particular, shipped as includable modules
   with typed item arrays. Ecommerce is where the parameter shapes are strict, hand-written most
   often, and wrong most often.
