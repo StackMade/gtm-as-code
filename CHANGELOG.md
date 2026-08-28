@@ -1,5 +1,33 @@
 # @stackmade/gtm-as-code
 
+## 0.6.0
+
+### Minor Changes
+
+- fff3ac5: Add `extends:` config composition: a config can pull in `events:`, `gtm.{variables,triggers,tags,folders}:`,
+  and `ga4.{dimensions,metrics,keyEvents}:` entries from other YAML files, for shared conventions or
+  reusable packs. Resolved in `loadConfig`, so every command supports it automatically. The root
+  config always wins over an extends target, and a collision between two extends targets is a
+  validation error. Validation errors on merged-in content point at the file and line they actually
+  came from.
+- f0af425: Add `gtm-code generate`, emitting typed event helpers from `events:`: an `EventName` union, one
+  params interface per event, an `EventParams` map, and a `track<E extends EventName>(event, params)`
+  function that pushes `{ event, ...params }` onto `window.dataLayer`. Prints to stdout by default;
+  `--out <path>` writes it to a file.
+- 8680ede: Add `gtm-code docs`, generating a Markdown data dictionary from `events:`: one section per event
+  with its description, key-event/consent flags, and a parameter table (type, required, custom
+  dimension). Prints to stdout by default; `--out <path>` writes it to a file.
+- b9a7764: Add event packs: `packs/ecommerce.yaml` and `packs/recommended.yaml`, `extends:`-able GA4
+  recommended events with their GA4-specified parameters. Added a `type: items` event parameter for
+  GA4's ecommerce item array; `gtm-code generate` emits it as `Item[]` backed by a shared `Item`
+  interface. Also narrowed the reserved-parameter-name lint so `currency` is only rejected when
+  marked `dimension: true`, GA4 reserves it for custom dimension/metric creation, not for its own
+  recommended events that require it as a standard parameter.
+- 623e511: Add a GA4 limits and naming linter to `validate`. Catches reserved event names and prefixes,
+  reserved parameter names and prefixes, invalid name characters, the 40-character name cap, the
+  25-parameter-per-event cap, and the 50-event-scoped-custom-dimension-per-property cap, all offline
+  before `apply` would otherwise hit them mid-run or have GA4 silently reject or scrub the data.
+
 ## 0.5.0
 
 ### Minor Changes
