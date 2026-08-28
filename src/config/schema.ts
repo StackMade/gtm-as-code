@@ -59,6 +59,15 @@ export interface MetricDef {
   protected?: boolean;
 }
 
+export interface EnhancedMeasurementDef {
+  scrollsEnabled?: boolean;
+  outboundClicksEnabled?: boolean;
+  siteSearchEnabled?: boolean;
+  videoEngagementEnabled?: boolean;
+  fileDownloadsEnabled?: boolean;
+  formInteractionsEnabled?: boolean;
+}
+
 export interface AnalyticsConfig {
   version: 1;
   project: { name: string };
@@ -78,6 +87,11 @@ export interface AnalyticsConfig {
     dimensions: Record<string, DimensionDef>;
     metrics: Record<string, MetricDef>;
     keyEvents: Record<string, unknown>;
+    /** The web data stream these stream-scoped settings apply to, looked up by URL, never created. */
+    streamWebsiteUrl?: string;
+    dataRetention?: string;
+    googleSignals?: string;
+    enhancedMeasurement?: EnhancedMeasurementDef;
   };
 }
 
@@ -90,6 +104,19 @@ const PARAMETER_TYPES = ['string', 'number', 'boolean', 'items'] as const;
 const DIMENSION_KEYS = ['scope', 'parameter', 'protected'];
 const METRIC_KEYS = ['scope', 'parameter', 'measurementUnit', 'protected'];
 const SCOPES = ['event', 'user'] as const;
+const GA4_TOP_LEVEL_KEYS = ['dimensions', 'metrics', 'keyEvents', 'streamWebsiteUrl', 'dataRetention', 'googleSignals', 'enhancedMeasurement'];
+/** `RETENTION_DURATION_UNSPECIFIED` is not a settable value, so it's excluded here. */
+const RETENTION_DURATIONS = ['TWO_MONTHS', 'FOURTEEN_MONTHS', 'TWENTY_SIX_MONTHS', 'THIRTY_EIGHT_MONTHS', 'FIFTY_MONTHS'] as const;
+/** `GOOGLE_SIGNALS_STATE_UNSPECIFIED` is not a settable value; `*_CONSENT_*` values are output-only. */
+const GOOGLE_SIGNALS_STATES = ['GOOGLE_SIGNALS_ENABLED', 'GOOGLE_SIGNALS_DISABLED'] as const;
+const ENHANCED_MEASUREMENT_KEYS = [
+  'scrollsEnabled',
+  'outboundClicksEnabled',
+  'siteSearchEnabled',
+  'videoEngagementEnabled',
+  'fileDownloadsEnabled',
+  'formInteractionsEnabled',
+];
 
 export function validateConfig(parsed: ParsedConfig): AnalyticsConfig {
   const root = requireObject(parsed, parsed.data, []);
@@ -335,12 +362,50 @@ function validateConsent(parsed: ParsedConfig, raw: unknown, path: string[]): Co
 
 function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4'] {
   const container = requireObject(parsed, raw, ['ga4']);
-  checkUnknownKeys(parsed, container, ['dimensions', 'metrics', 'keyEvents'], ['ga4']);
+  checkUnknownKeys(parsed, container, GA4_TOP_LEVEL_KEYS, ['ga4']);
+
+  const streamWebsiteUrl =
+    container.streamWebsiteUrl !== undefined
+      ? requireString(parsed, container.streamWebsiteUrl, ['ga4', 'streamWebsiteUrl'])
+      : undefined;
+  const dataRetention =
+    container.dataRetention !== undefined
+      ? requireEnum(parsed, container.dataRetention, RETENTION_DURATIONS, ['ga4', 'dataRetention'])
+      : undefined;
+  const googleSignals =
+    container.googleSignals !== undefined
+      ? requireEnum(parsed, container.googleSignals, GOOGLE_SIGNALS_STATES, ['ga4', 'googleSignals'])
+      : undefined;
+  const enhancedMeasurement =
+    container.enhancedMeasurement !== undefined
+      ? validateEnhancedMeasurement(parsed, container.enhancedMeasurement, ['ga4', 'enhancedMeasurement'])
+      : undefined;
+  if (enhancedMeasurement !== undefined && streamWebsiteUrl === undefined) {
+    fail(parsed, ['ga4', 'enhancedMeasurement'], [
+      { label: 'Expected', value: '`ga4.streamWebsiteUrl` set (enhanced measurement is a stream-scoped setting)' },
+      { label: 'Received', value: 'no `ga4.streamWebsiteUrl`' },
+    ]);
+  }
+
   return {
     dimensions: validateDimensions(parsed, container.dimensions ?? {}, ['ga4', 'dimensions']),
     metrics: validateMetrics(parsed, container.metrics ?? {}, ['ga4', 'metrics']),
     keyEvents: requireObject(parsed, container.keyEvents ?? {}, ['ga4', 'keyEvents']),
+    streamWebsiteUrl,
+    dataRetention,
+    googleSignals,
+    enhancedMeasurement,
   };
+}
+
+function validateEnhancedMeasurement(parsed: ParsedConfig, raw: unknown, path: string[]): EnhancedMeasurementDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, ENHANCED_MEASUREMENT_KEYS, path);
+  const result: EnhancedMeasurementDef = {};
+  for (const key of ENHANCED_MEASUREMENT_KEYS) {
+    if (def[key] !== undefined) (result as Record<string, boolean>)[key] = requireBoolean(parsed, def[key], [...path, key]);
+  }
+  return result;
 }
 
 function validateDimensions(

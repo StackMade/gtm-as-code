@@ -268,3 +268,76 @@ gtm:
 `;
   assert.throws(() => validate(yaml), ConfigError);
 });
+
+test('ga4.dataRetention accepts a valid retention duration', () => {
+  const yaml = `
+ga4:
+  dataRetention: FOURTEEN_MONTHS
+`;
+  const config = validate(yaml);
+  assert.equal(config.ga4.dataRetention, 'FOURTEEN_MONTHS');
+});
+
+test('ga4.dataRetention rejects a value outside the RetentionDuration enum', () => {
+  const yaml = `
+ga4:
+  dataRetention: SIX_MONTHS
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.dataRetention rejects RETENTION_DURATION_UNSPECIFIED, which is not a settable value', () => {
+  const yaml = `
+ga4:
+  dataRetention: RETENTION_DURATION_UNSPECIFIED
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.googleSignals accepts GOOGLE_SIGNALS_DISABLED', () => {
+  const yaml = `
+ga4:
+  googleSignals: GOOGLE_SIGNALS_DISABLED
+`;
+  const config = validate(yaml);
+  assert.equal(config.ga4.googleSignals, 'GOOGLE_SIGNALS_DISABLED');
+});
+
+test('ga4.googleSignals rejects the output-only consent-style values', () => {
+  const yaml = `
+ga4:
+  googleSignals: GOOGLE_SIGNALS_CONSENT_CONSENTED
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.enhancedMeasurement requires ga4.streamWebsiteUrl to be set', () => {
+  const yaml = `
+ga4:
+  enhancedMeasurement:
+    scrollsEnabled: false
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.enhancedMeasurement with streamWebsiteUrl set passes validation', () => {
+  const yaml = `
+ga4:
+  streamWebsiteUrl: "https://example.com"
+  enhancedMeasurement:
+    scrollsEnabled: false
+    outboundClicksEnabled: true
+`;
+  const config = validate(yaml);
+  assert.deepEqual(config.ga4.enhancedMeasurement, { scrollsEnabled: false, outboundClicksEnabled: true });
+});
+
+test('ga4.enhancedMeasurement rejects an unknown field', () => {
+  const yaml = `
+ga4:
+  streamWebsiteUrl: "https://example.com"
+  enhancedMeasurement:
+    pageChangesEnabled: true
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});

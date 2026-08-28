@@ -249,6 +249,18 @@ ga4:
       # measurementUnit optional
   keyEvents:
     <name>: { protected: boolean }
+  streamWebsiteUrl: string
+    # the web data stream these stream-scoped settings apply to, looked up by URL, never created
+  dataRetention: TWO_MONTHS | FOURTEEN_MONTHS | TWENTY_SIX_MONTHS | THIRTY_EIGHT_MONTHS | FIFTY_MONTHS
+  googleSignals: GOOGLE_SIGNALS_ENABLED | GOOGLE_SIGNALS_DISABLED
+  enhancedMeasurement:
+    scrollsEnabled: boolean
+    outboundClicksEnabled: boolean
+    siteSearchEnabled: boolean
+    videoEngagementEnabled: boolean
+    fileDownloadsEnabled: boolean
+    formInteractionsEnabled: boolean
+    # requires streamWebsiteUrl to be set
 ```
 
 Only `type` (and, for tags, `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`) is
@@ -268,6 +280,16 @@ so a lookup against `gtm.triggers` can't resolve them, this tool maps the reserv
 GTM's fixed numeric trigger id instead (see `src/providers/google/gtm/builtin-triggers.ts`). Only the
 two names above are supported; `"Consent Initialization - All Pages"` is a known GTM UI trigger whose
 numeric id couldn't be confirmed through the API and isn't guessed at.
+
+`ga4.dataRetention`, `ga4.googleSignals` and `ga4.enhancedMeasurement` have no create/delete
+lifecycle, unlike dimensions/metrics/keyEvents. `plan`/`drift` compare the declared value against
+GA4's live property/stream state and report a difference as an update; `apply` PATCHes it. A setting
+left out of config is never touched, so enabling one by hand in the GA4 UI is never reported as
+drift. `dataRetention` and `googleSignals` are property-level and apply regardless of
+`streamWebsiteUrl`; `enhancedMeasurement` is scoped to the stream `streamWebsiteUrl` resolves to, so
+it requires that field. `googleSignals` and `enhancedMeasurement` live under the GA4 Admin API's
+`v1alpha`, not `v1beta` like everything else this tool touches, since GA4 hasn't promoted them to
+`v1beta` yet; this tool routes each request to the right version internally.
 
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),

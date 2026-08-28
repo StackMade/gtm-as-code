@@ -11,6 +11,7 @@ import { GtmClient, resolveWorkspaceId, gtmIdField, type GtmKind, type GtmObject
 import { fromGtmPayload } from '../../providers/google/gtm/mapping.js';
 import { BUILT_IN_VARIABLES } from '../../providers/google/gtm/builtin-variables.js';
 import { Ga4Client, type Ga4Kind, type Ga4Object } from '../../providers/google/ga4/client.js';
+import { diffGa4Settings, hasGa4SettingsChanges, type Ga4SettingsDiff } from '../../providers/google/ga4/settings.js';
 import { fromGa4Payload } from '../../providers/google/ga4/mapping.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
@@ -45,6 +46,8 @@ export interface PlanResult {
   folderGtmIdToLogicalId: Record<string, string>;
   /** Built-in variables declared in config but not yet enabled remotely. Additive only — never disabled by `apply`. */
   builtInVariablesToEnable: string[];
+  /** GA4 property/stream settings (retention, Google Signals, enhanced measurement) that differ from live state. */
+  ga4Settings: Ga4SettingsDiff;
 }
 
 /** Read-only by design: `*Readonly` scopes and `listManaged` only, never create/update/delete. */
@@ -52,7 +55,9 @@ export async function plan(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmReadonly, SCOPES.ga4Readonly]);
     render(result, opts.format);
-    if (result.changes.length > 0 || result.builtInVariablesToEnable.length > 0) process.exitCode = 2;
+    if (result.changes.length > 0 || result.builtInVariablesToEnable.length > 0 || hasGa4SettingsChanges(result.ga4Settings)) {
+      process.exitCode = 2;
+    }
   } catch (error) {
     printFailure(error);
     process.exitCode = 1;
@@ -97,7 +102,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
 
   // Folders and triggers had to be read first — reverse mapping needs them — but nothing
   // below depends on anything else here, so the remaining listings go out together.
-  const [gtmManaged, ga4Managed, enabledBuiltInVariables] = await Promise.all([
+  const [gtmManaged, ga4Managed, enabledBuiltInVariables, ga4Settings] = await Promise.all([
     Promise.all(
       GTM_KINDS.map(async (kind) => ({
         kind,
@@ -106,6 +111,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     ),
     Promise.all(GA4_KINDS.map(async (kind) => ({ kind, resources: await ga4.listManaged(kind, state) }))),
     gtm.listEnabledBuiltInVariables(),
+    diffGa4Settings(ga4, config.ga4),
   ]);
 
   const builtInVariablesToEnable = config.gtm.builtInVariables
@@ -152,6 +158,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     triggerGtmIdToLogicalId,
     folderGtmIdToLogicalId,
     builtInVariablesToEnable,
+    ga4Settings,
   };
 }
 
@@ -166,6 +173,7 @@ export interface PlanJson {
   counts: PlanResult['counts'];
   changes: Array<{ operation: Change['operation']; type: string; id: string }>;
   builtInVariablesToEnable?: string[];
+  ga4Settings?: Ga4SettingsDiff;
 }
 
 /** Only the fields these renderers need — lets `diff`/`drift` reuse them without a full `PlanResult`. */
@@ -219,6 +227,7 @@ function renderMarkdown(result: PlanResult): void {
 export function planJsonWithBuiltIns(result: PlanResult): PlanJson {
   const json = buildPlanJson(result);
   if (result.builtInVariablesToEnable.length > 0) json.builtInVariablesToEnable = builtInVariableNames(result.builtInVariablesToEnable);
+  if (hasGa4SettingsChanges(result.ga4Settings)) json.ga4Settings = result.ga4Settings;
   return json;
 }
 
@@ -227,7 +236,18 @@ export function planMarkdownWithBuiltIns(result: PlanResult): string {
   if (result.builtInVariablesToEnable.length > 0) {
     lines.push('', `Built-in variables to enable: ${builtInVariableNames(result.builtInVariablesToEnable).join(', ')}`);
   }
+  if (hasGa4SettingsChanges(result.ga4Settings)) {
+    lines.push('', `GA4 settings to update: ${describeGa4SettingsChanges(result.ga4Settings).join(', ')}`);
+  }
   return lines.join('\n');
+}
+
+function describeGa4SettingsChanges(diff: Ga4SettingsDiff): string[] {
+  const changes: string[] = [];
+  if (diff.dataRetention) changes.push(`dataRetention → ${diff.dataRetention.patch.eventDataRetention}`);
+  if (diff.googleSignals) changes.push(`googleSignals → ${diff.googleSignals.patch.state}`);
+  if (diff.enhancedMeasurement) changes.push(`enhancedMeasurement.{${diff.enhancedMeasurement.updateMask.join(', ')}}`);
+  return changes;
 }
 
 export function builtInVariableNames(types: string[]): string[] {
@@ -235,7 +255,7 @@ export function builtInVariableNames(types: string[]): string[] {
   return types.map((type) => byType[type] ?? type);
 }
 
-function renderText({ changes, counts, builtInVariablesToEnable }: PlanResult): void {
+function renderText({ changes, counts, builtInVariablesToEnable, ga4Settings }: PlanResult): void {
   console.log('GTM as Code\n');
 
   for (const { header, prefix, showAction } of [
@@ -258,6 +278,12 @@ function renderText({ changes, counts, builtInVariablesToEnable }: PlanResult): 
   if (builtInVariablesToEnable.length > 0) {
     console.log('Built-in variables\n');
     for (const name of builtInVariableNames(builtInVariablesToEnable)) console.log(`+ enable            ${name}`);
+    console.log('');
+  }
+
+  if (hasGa4SettingsChanges(ga4Settings)) {
+    console.log('GA4 settings\n');
+    for (const line of describeGa4SettingsChanges(ga4Settings)) console.log(`~ update            ${line}`);
     console.log('');
   }
 

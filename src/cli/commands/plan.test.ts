@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildPlanJson, buildPlanMarkdown, type PlanResult } from './plan.js';
+import { buildPlanJson, buildPlanMarkdown, planJsonWithBuiltIns, planMarkdownWithBuiltIns, type PlanResult } from './plan.js';
 import type { Change } from '../../core/resource.js';
+import type { Ga4SettingsDiff } from '../../providers/google/ga4/settings.js';
 
-function resultWith(changes: Change[]): PlanResult {
+function resultWith(changes: Change[], ga4Settings: Ga4SettingsDiff = {}): PlanResult {
   const counts = { create: 0, update: 0, delete: 0 };
   for (const change of changes) counts[change.operation]++;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { changes, counts } as any as PlanResult;
+  return { changes, counts, builtInVariablesToEnable: [], ga4Settings } as any as PlanResult;
 }
 
 const createTrigger: Change = {
@@ -46,4 +47,21 @@ test('buildPlanMarkdown renders a counts line and one table row per change', () 
 
 test('buildPlanMarkdown reports no changes without a table', () => {
   assert.equal(buildPlanMarkdown(resultWith([])), '**GTM as Code**: no changes.');
+});
+
+test('planJsonWithBuiltIns adds a ga4Settings key only when a setting actually differs', () => {
+  const dataRetention = { patch: { eventDataRetention: 'FOURTEEN_MONTHS' }, updateMask: ['eventDataRetention'] };
+  const json = planJsonWithBuiltIns(resultWith([], { dataRetention }));
+  assert.deepEqual(json.ga4Settings, { dataRetention });
+  assert.equal(planJsonWithBuiltIns(resultWith([])).ga4Settings, undefined);
+});
+
+test('planMarkdownWithBuiltIns lists each GA4 setting that changed', () => {
+  const markdown = planMarkdownWithBuiltIns(
+    resultWith([], {
+      dataRetention: { patch: { eventDataRetention: 'FOURTEEN_MONTHS' }, updateMask: ['eventDataRetention'] },
+      googleSignals: { patch: { state: 'GOOGLE_SIGNALS_DISABLED' }, updateMask: ['state'] },
+    }),
+  );
+  assert.match(markdown, /GA4 settings to update: dataRetention → FOURTEEN_MONTHS, googleSignals → GOOGLE_SIGNALS_DISABLED/);
 });

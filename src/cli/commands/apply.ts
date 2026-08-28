@@ -10,6 +10,7 @@ import type { GtmKind } from '../../providers/google/gtm/client.js';
 import { gtmIdField } from '../../providers/google/gtm/client.js';
 import { toGa4Payload } from '../../providers/google/ga4/mapping.js';
 import type { Ga4Kind } from '../../providers/google/ga4/client.js';
+import { hasGa4SettingsChanges } from '../../providers/google/ga4/settings.js';
 import { WorkspaceConflictError } from '../../providers/google/gtm/errors.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
@@ -25,7 +26,7 @@ export async function apply(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmEdit, SCOPES.ga4Edit]);
 
-    if (result.changes.length === 0 && result.builtInVariablesToEnable.length === 0) {
+    if (result.changes.length === 0 && result.builtInVariablesToEnable.length === 0 && !hasGa4SettingsChanges(result.ga4Settings)) {
       console.log('No changes.');
       return;
     }
@@ -54,6 +55,7 @@ export async function apply(opts: GlobalOptions): Promise<void> {
     console.log(`${result.counts.update} to update`);
     console.log(`${result.counts.delete} to delete`);
     if (result.builtInVariablesToEnable.length > 0) console.log(`${result.builtInVariablesToEnable.length} built-in variable(s) to enable`);
+    if (hasGa4SettingsChanges(result.ga4Settings)) console.log('GA4 property/stream settings to update');
     console.log('');
 
     if (!opts.autoApprove && !(await confirm())) {
@@ -94,6 +96,21 @@ async function execute(result: PlanResult): Promise<void> {
 
   // Enabled first: tags/triggers created below may reference these by name.
   await gtm.enableBuiltInVariables(result.builtInVariablesToEnable);
+
+  const { ga4Settings } = result;
+  if (ga4Settings.dataRetention) {
+    await ga4.updateDataRetentionSettings(ga4Settings.dataRetention.patch, ga4Settings.dataRetention.updateMask);
+  }
+  if (ga4Settings.googleSignals) {
+    await ga4.updateGoogleSignalsSettings(ga4Settings.googleSignals.patch, ga4Settings.googleSignals.updateMask);
+  }
+  if (ga4Settings.enhancedMeasurement && ga4Settings.streamName) {
+    await ga4.updateEnhancedMeasurementSettings(
+      ga4Settings.streamName,
+      ga4Settings.enhancedMeasurement.patch,
+      ga4Settings.enhancedMeasurement.updateMask,
+    );
+  }
 
   const gtmChangesByKind = groupGtm(changes);
   const ga4Changes = changes.filter((c) => resourceOf(c).type.startsWith('ga4.'));

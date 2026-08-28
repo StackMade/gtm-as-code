@@ -4,6 +4,41 @@ import { findManagedId, isProtected, stateKey, type StateFile } from '../../../c
 import { Ga4ApiError, extractApiStatus } from './errors.js';
 
 const BASE_URL = 'https://analyticsadmin.googleapis.com/v1beta';
+// googleSignalsSettings and a data stream's enhancedMeasurementSettings only exist under v1alpha
+// (confirmed live 2026-08-29: both 404 on v1beta). dataRetentionSettings and dataStreams are
+// v1beta, like everything else this client touches.
+const V1ALPHA_BASE_URL = 'https://analyticsadmin.googleapis.com/v1alpha';
+
+export interface DataRetentionSettings {
+  name?: string;
+  eventDataRetention: string;
+  userDataRetention: string;
+  resetUserDataOnNewActivity?: boolean;
+}
+
+export interface GoogleSignalsSettings {
+  name?: string;
+  state: string;
+  consent?: string;
+}
+
+/** A subset of a web data stream's fields, this tool only looks streams up by URL, never creates one. */
+export interface DataStream {
+  name: string;
+  type: string;
+  displayName?: string;
+  webStreamData?: { measurementId?: string; defaultUri?: string };
+}
+
+export interface EnhancedMeasurementSettings {
+  name?: string;
+  scrollsEnabled?: boolean;
+  outboundClicksEnabled?: boolean;
+  siteSearchEnabled?: boolean;
+  videoEngagementEnabled?: boolean;
+  fileDownloadsEnabled?: boolean;
+  formInteractionsEnabled?: boolean;
+}
 
 const KINDS = {
   dimension: { collection: 'customDimensions', field: 'customDimensions', type: 'ga4.dimension', archivable: true },
@@ -125,6 +160,113 @@ export class Ga4Client {
       }
     } catch (error) {
       throw new Ga4ApiError(`delete ${kind}`, name, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  /**
+   * Looks up an existing web data stream by its URL. This tool never creates or deletes streams,
+   * only reads them, so config declares `streamWebsiteUrl` to find the stream its settings apply to.
+   */
+  async findWebStreamByUrl(url: string): Promise<DataStream | undefined> {
+    const streams = await this.listDataStreams();
+    return streams.find((stream) => stream.webStreamData?.defaultUri === url);
+  }
+
+  async listDataStreams(): Promise<DataStream[]> {
+    const streams: DataStream[] = [];
+    let pageToken: string | undefined;
+    try {
+      do {
+        const response = await this.auth.request<Ga4ListResponse>({
+          url: `${BASE_URL}/properties/${this.propertyId}/dataStreams`,
+          params: { pageSize: GA4_MAX_PAGE_SIZE, ...(pageToken ? { pageToken } : {}) },
+        });
+        streams.push(...((response.data.dataStreams as DataStream[] | undefined) ?? []));
+        pageToken = response.data.nextPageToken;
+      } while (pageToken);
+    } catch (error) {
+      throw new Ga4ApiError('list dataStreams', this.propertyId, extractApiStatus(error), { cause: error });
+    }
+    return streams;
+  }
+
+  async getDataRetentionSettings(): Promise<DataRetentionSettings> {
+    try {
+      const response = await this.auth.request<DataRetentionSettings>({
+        url: `${BASE_URL}/properties/${this.propertyId}/dataRetentionSettings`,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Ga4ApiError('get dataRetentionSettings', this.propertyId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  async updateDataRetentionSettings(patch: Partial<DataRetentionSettings>, updateMask: string[]): Promise<DataRetentionSettings> {
+    try {
+      const response = await this.auth.request<DataRetentionSettings>({
+        url: `${BASE_URL}/properties/${this.propertyId}/dataRetentionSettings`,
+        method: 'PATCH',
+        params: { updateMask: updateMask.join(',') },
+        data: patch,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Ga4ApiError('update dataRetentionSettings', this.propertyId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  async getGoogleSignalsSettings(): Promise<GoogleSignalsSettings> {
+    try {
+      const response = await this.auth.request<GoogleSignalsSettings>({
+        url: `${V1ALPHA_BASE_URL}/properties/${this.propertyId}/googleSignalsSettings`,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Ga4ApiError('get googleSignalsSettings', this.propertyId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  async updateGoogleSignalsSettings(patch: Partial<GoogleSignalsSettings>, updateMask: string[]): Promise<GoogleSignalsSettings> {
+    try {
+      const response = await this.auth.request<GoogleSignalsSettings>({
+        url: `${V1ALPHA_BASE_URL}/properties/${this.propertyId}/googleSignalsSettings`,
+        method: 'PATCH',
+        params: { updateMask: updateMask.join(',') },
+        data: patch,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Ga4ApiError('update googleSignalsSettings', this.propertyId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  /** `streamName` is a data stream's full resource path (e.g. `properties/x/dataStreams/y`). */
+  async getEnhancedMeasurementSettings(streamName: string): Promise<EnhancedMeasurementSettings> {
+    try {
+      const response = await this.auth.request<EnhancedMeasurementSettings>({
+        url: `${V1ALPHA_BASE_URL}/${streamName}/enhancedMeasurementSettings`,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Ga4ApiError('get enhancedMeasurementSettings', streamName, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  async updateEnhancedMeasurementSettings(
+    streamName: string,
+    patch: Partial<EnhancedMeasurementSettings>,
+    updateMask: string[],
+  ): Promise<EnhancedMeasurementSettings> {
+    try {
+      const response = await this.auth.request<EnhancedMeasurementSettings>({
+        url: `${V1ALPHA_BASE_URL}/${streamName}/enhancedMeasurementSettings`,
+        method: 'PATCH',
+        params: { updateMask: updateMask.join(',') },
+        data: patch,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Ga4ApiError('update enhancedMeasurementSettings', streamName, extractApiStatus(error), { cause: error });
     }
   }
 }

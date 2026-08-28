@@ -275,14 +275,23 @@ relative to its value, because the data is already there.
 The Admin API surface well beyond custom dimensions. Each item is state-tracked ownership, so 0.2's
 GA4 hardening is a hard prerequisite for all of it.
 
-- Data streams and enhanced measurement. Web, iOS and Android streams, the enhanced measurement
-  toggles (scroll, outbound click, site search, video, file download), and measurement protocol
-  secrets. Enhanced measurement is toggle-only ownership and silently changes what gets collected,
-  which makes it exactly the sort of thing that should be in version control. It also removes a
-  copy-paste seam: once streams are managed, `google.ga4.measurementId` can be derived from the
-  stream rather than pasted by hand into both the config and the GTM Google tag.
-- Property settings. Data retention, internal and developer traffic filters, attribution settings,
-  Google Signals. Governance settings that are set once, forgotten, and audited later.
+- Data streams and enhanced measurement. **Partially done.** `ga4.streamWebsiteUrl` looks up an
+  existing web stream by URL (this tool never creates or deletes streams), and
+  `ga4.enhancedMeasurement.{scrollsEnabled, outboundClicksEnabled, siteSearchEnabled,
+  videoEngagementEnabled, fileDownloadsEnabled, formInteractionsEnabled}` diffs against the stream's
+  live `enhancedMeasurementSettings` and applies via `plan`/`apply`, following the settings-diff
+  model below rather than the create/update/delete `Resource` model, since a stream's enhanced
+  measurement flags have no lifecycle of their own. Still open: iOS/Android streams, and measurement
+  protocol secrets. Creating streams and deriving `google.ga4.measurementId` from one, so it no
+  longer needs pasting into both config and the GTM Google tag by hand, is also still open.
+- Property settings. **Partially done.** `ga4.dataRetention` and `ga4.googleSignals` diff against
+  the property's live `dataRetentionSettings`/`googleSignalsSettings` and apply via `plan`/`apply`.
+  Both are property-level settings with no create/delete lifecycle, so they're diffed directly
+  against GA4's live state (`src/providers/google/ga4/settings.ts`) rather than modeled as
+  `Resource`s; `googleSignalsSettings` and a stream's `enhancedMeasurementSettings` live under the
+  GA4 Admin API's `v1alpha`, not `v1beta` like everything else this tool touches (confirmed live
+  2026-08-29: both 404 on `v1beta`), so `Ga4Client` routes each request to the version it actually
+  lives under. Still open: internal and developer traffic filters, attribution settings.
 - Audiences. Audience definitions as code: the largest schema surface in this milestone, and the one
   most worth reviewing in a pull request.
 - Event create and modify rules. Server-side event rewriting, currently invisible to anyone reading
