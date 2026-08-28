@@ -7,6 +7,7 @@ import { plan } from './commands/plan.js';
 import { apply } from './commands/apply.js';
 import { publish } from './commands/publish.js';
 import { rollback } from './commands/rollback.js';
+import { pull } from './commands/pull.js';
 import type { GlobalOptions } from './options.js';
 
 // package.json is the only place the version is written down; `npm version` bumps it there.
@@ -70,6 +71,17 @@ program
   .option('--auto-approve', 'skip the confirmation prompt', false)
   .action(async function (this: Command) {
     await rollback(globalOptions(this));
+  });
+
+program
+  .command('pull')
+  .description('reverse-generate YAML from a live GTM container and GA4 property')
+  .option('--resource <kindAndId>', 'pull one resource into the existing config, e.g. tag:generate_lead_tag')
+  .option('--out <path>', 'where to write the generated config (default: the resolved config path)')
+  .option('--from-export <path>', 'read a GTM UI container export (Admin > Export Container) instead of calling the API')
+  .action(async function (this: Command) {
+    const opts = this.opts<{ resource?: string; out?: string; fromExport?: string }>();
+    await pull({ ...globalOptions(this), resource: opts.resource, out: opts.out, fromExport: opts.fromExport });
   });
 
 await program.parseAsync();
