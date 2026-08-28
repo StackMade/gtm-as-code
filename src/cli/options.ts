@@ -5,4 +5,5 @@ export interface GlobalOptions {
   config?: string;
   autoApprove?: boolean;
   allowDestroy?: boolean;
+  allowDestroyProtected?: boolean;
 }

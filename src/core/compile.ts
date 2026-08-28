@@ -61,11 +61,18 @@ export function compileEvents(config: AnalyticsConfig, file: string): AnalyticsC
     if (!(eventId in tags)) {
       assertAvailable(eventId, eventWhere);
       record(eventId, eventWhere);
+      if (event.consent === undefined) {
+        throw new ConfigError(file, undefined, eventWhere, [
+          { label: 'Missing consent', value: `event "${eventId}" compiles to a ga4Event tag, which needs a \`consent\` block` },
+          { label: 'Fix', value: 'declare `consent: {status: needed, types: [...]}`, or `consent: {status: notNeeded}` to waive it explicitly' },
+        ]);
+      }
       tags[eventId] = {
         type: 'ga4Event',
         eventName: eventId,
         trigger: [eventId],
         parameters: tagParameters,
+        consent: event.consent,
         ...(config.google.ga4.measurementId ? { measurementId: config.google.ga4.measurementId } : {}),
       };
     }

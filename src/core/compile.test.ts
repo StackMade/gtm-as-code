@@ -27,6 +27,7 @@ const generateLeadConfig = baseConfig({
         form: { type: 'string', dimension: true },
         source: { type: 'string', optional: true },
       },
+      consent: { status: 'needed', types: ['analytics_storage'] },
     },
   },
 });
@@ -47,6 +48,7 @@ test('the worked example produces exactly the expected GTM resources', () => {
     eventName: 'generate_lead',
     trigger: ['generate_lead'],
     parameters: { form: '{{form}}', source: '{{source}}' },
+    consent: { status: 'needed', types: ['analytics_storage'] },
   });
 });
 
@@ -62,7 +64,7 @@ test('the worked example produces exactly the expected GA4 resources', () => {
 test('explicit gtm primitive with the same id as a derived one wins (escape hatch)', () => {
   const config = baseConfig({
     events: {
-      generate_lead: { parameters: { form: { type: 'string' } } },
+      generate_lead: { parameters: { form: { type: 'string' } }, consent: { status: 'notNeeded' } },
     },
     gtm: {
       variables: { form: { type: 'dataLayerVariable', variableName: 'form', defaultValue: 'n/a' } },
@@ -82,6 +84,19 @@ test('explicit gtm primitive with the same id as a derived one wins (escape hatc
   });
 });
 
+test('an event with no consent declared throws (its ga4Event tag would fire with no consent guard)', () => {
+  const config = baseConfig({ events: { generate_lead: { parameters: {} } } });
+  assert.throws(() => compileEvents(config, 'analytics.yaml'), ConfigError);
+});
+
+test('an event explicitly waiving consent (notNeeded) compiles without throwing', () => {
+  const config = baseConfig({
+    events: { generate_lead: { parameters: {}, consent: { status: 'notNeeded' } } },
+  });
+  const compiled = compileEvents(config, 'analytics.yaml');
+  assert.deepEqual(compiled.gtm.tags.generate_lead.consent, { status: 'notNeeded' });
+});
+
 test('derived id colliding with an unrelated explicit resource in another section throws', () => {
   const config = baseConfig({
     events: {
@@ -96,8 +111,8 @@ test('derived id colliding with an unrelated explicit resource in another sectio
 test('same parameter reused across events derives one shared DLV, not a collision', () => {
   const config = baseConfig({
     events: {
-      generate_lead: { parameters: { source: { type: 'string' } } },
-      purchase: { parameters: { source: { type: 'string' } } },
+      generate_lead: { parameters: { source: { type: 'string' } }, consent: { status: 'notNeeded' } },
+      purchase: { parameters: { source: { type: 'string' } }, consent: { status: 'notNeeded' } },
     },
   });
 

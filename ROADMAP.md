@@ -191,12 +191,27 @@ The highest-value config-shaped feature that isn't coverage. Consent settings ar
 in the EEA, tedious and error-prone to set per tag in the UI, and reviewed by people who would
 rather read a diff than click through 40 tags.
 
-- A `consent:` block. Compiles to a consent initialization tag plus per-tag consent settings, so
-  consent is declared once and enforced across every tag instead of remembered individually.
-- Consent lint. Fail validation when a tag that clearly needs consent doesn't declare it.
-- PII lint. Flag event parameters whose names suggest personal data. GA4 forbids it, and the penalty
-  is data deletion rather than a warning.
-- Protected resources. Mark resources in config as requiring an explicit override to delete.
+- A `consent:` block. **Done, via existing primitives, not new syntax.** A bare `consentInit`
+  trigger (live-verified: `{name, type: 'consentInit'}`, no configurable fields) fires before
+  everything else, and a per-tag/per-event `consent: {status, types}` field maps to GTM's
+  `consentSettings` (live-verified shape: `{consentStatus: 'needed', consentType: {type: 'list',
+  list: [{type: 'template', value: '<type>'}]}}` when `needed`, `{consentStatus: 'notNeeded'}`
+  otherwise; `types` isn't accepted when `notNeeded`). A config author writes an ordinary
+  `consentInit` trigger plus a `customHtml` tag that calls `gtag('consent', 'default', ...)`; no
+  dedicated "consent initialization tag" object exists in the GTM API to compile to.
+- Consent lint. **Done.** `gtm.tags` entries of type `ga4Event`/`googleTag`, and every `events.*`
+  entry (which compiles to a `ga4Event` tag), fail validation without a `consent` block. Other tag
+  types aren't checked: there's no reliable way to tell from `type` alone whether a `customHtml` or
+  `customImage` tag loads something that needs consent.
+- PII lint. **Done.** Event parameter names are checked against a list of substrings that suggest
+  personal data (`email`, `phone`, `address`, `ssn`, `password`, and more; see `PII_NAME_PATTERNS`
+  in `src/config/schema.ts`). A substring list is a heuristic, not a guarantee: it won't catch every
+  PII-shaped name, and it can flag a legitimate name that happens to contain one of the patterns.
+- Protected resources. **Done for GTM.** `protected: true` on a `gtm.variables`/`triggers`/`tags`
+  entry is stamped into GTM's `notes` field alongside ownership metadata, so it survives even after
+  the resource is removed from config. Deleting it then needs `--allow-destroy-protected` in
+  addition to `--allow-destroy`. GA4 resources have no equivalent field to persist the flag into, so
+  they aren't covered.
 
 ## 0.6: the tracking plan as a product
 

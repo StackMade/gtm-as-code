@@ -181,22 +181,31 @@ events:
         type: string | number | boolean
         dimension: boolean     # optional, also registers this parameter as a GA4 dimension
         optional: boolean      # optional
+    consent:                   # required: every event compiles to a ga4Event tag, which needs one
+      status: needed | notNeeded
+      types: [string, ...]     # required when status is needed, e.g. [analytics_storage]
 
 gtm:
   builtInVariables: [string, ...]  # optional, GTM display names e.g. "Click Text", "Page Path"
   folders:
     <name>: {}
   variables:
-    <name>: { type: string, folder: string, ... }
+    <name>: { type: string, folder: string, protected: boolean, ... }
   triggers:
-    <name>: { type: string, folder: string, ... }
+    <name>: { type: string, folder: string, protected: boolean, ... }
+      # a bare "consentInit" trigger (no extra fields) fires before every other trigger
   tags:
     <name>: { type: string, trigger: [string, ...], exceptTrigger: [string, ...],
-               setupTags: [string, ...], teardownTags: [string, ...], folder: string, ... }
+               setupTags: [string, ...], teardownTags: [string, ...], folder: string,
+               protected: boolean, consent: { status: needed | notNeeded, types: [string, ...] }, ... }
       # trigger and exceptTrigger (optional, blocking triggers) reference trigger names above
       # setupTags/teardownTags (optional) reference other tag names, mapping to GTM's
       #   setupTag/teardownTag tag sequencing
       # folder (optional, on variables/triggers/tags too) references a name under gtm.folders
+      # protected (optional, on any gtm.* resource) requires --allow-destroy-protected, on top of
+      #   --allow-destroy, before apply may delete it
+      # consent (required on ga4Event/googleTag tags) maps to GTM's consentSettings; types is only
+      #   allowed when status is needed
 
 ga4:
   dimensions:
@@ -222,7 +231,11 @@ Validation also catches:
 - the same resource id defined twice across `gtm.*` and `ga4.*`,
 - a tag's `trigger` or `exceptTrigger` referencing a trigger name that doesn't exist,
 - a tag's `setupTags` or `teardownTags` referencing a tag name that doesn't exist, or itself,
-- a `folder` referencing a name not defined under `gtm.folders`.
+- a `folder` referencing a name not defined under `gtm.folders`,
+- a `ga4Event` or `googleTag` tag (hand-authored, or compiled from `events.*`) with no `consent`
+  block, since it would otherwise load a Google measurement script with no consent check,
+- an event parameter whose name suggests personal data (`email`, `phone`, `address`, and similar).
+  GA4 responds to PII in event parameters by deleting the data, not just rejecting the request.
 
 ## CLI reference
 
@@ -266,7 +279,7 @@ The read-only, CI-friendly sibling of `plan`. Authorizes with the same read-only
 live state against config, and reports whether they've diverged, without printing the full plan
 detail `plan` does. Exit code `1` if drift is found (or on error), `0` if clean.
 
-### `gtm-code apply [--auto-approve] [--allow-destroy]`
+### `gtm-code apply [--auto-approve] [--allow-destroy] [--allow-destroy-protected]`
 
 Runs the same diff as `plan`, then executes it. Deletes go first (tags, then triggers, then
 variables, the reverse of creation order), then creates in dependency order so a tag can reference
@@ -284,6 +297,12 @@ your routine CI apply already uses, and a destructive change deserves its own op
 riding along with it. This applies to GA4 deletes too, even though a GA4 custom dimension or metric
 is archived rather than hard-deleted (key events are hard-deleted); `plan` prints all three as
 `- delete`, so `apply` treats them the same way for this gate.
+
+A resource marked `protected: true` in config needs `--allow-destroy-protected` on top of
+`--allow-destroy` before `apply` deletes it, even if `--allow-destroy` alone would otherwise cover
+the rest of the plan. This only works for GTM resources today: the flag is checked against
+ownership metadata GTM stores in the resource's own `notes` field, and GA4 has no equivalent field
+to stamp it into.
 
 ### `gtm-code publish`
 
@@ -454,7 +473,8 @@ Not available yet. These are known gaps, so please don't file a bug for them:
 - GTM custom templates; conversion linker and community-gallery template tags (their payloads need
   fields, like Floodlight ids or a gallery template's own parameter schema, this tool can't
   live-verify against a sandbox container). See [Schema](#schema) for what is covered
-- Consent Mode settings
+- Protected resources only cover GTM; GA4 dimensions/metrics/key events have no field to persist
+  the flag against, so removing one from config still deletes it outright
 - GA4 data streams, enhanced measurement, audiences, and property settings
 
 There is deliberately no `action.yml` in this repository. The GitHub Action ships from

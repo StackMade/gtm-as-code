@@ -350,6 +350,44 @@ test('oncePerPage firing option round-trips to GTM\'s ONCE_PER_LOAD', () => {
   assert.equal(fromGtmPayload('tag', gtm).firingOption, 'oncePerPage');
 });
 
+test('tag consent (needed, with types) round-trips', () => {
+  const gtm = toGtmPayload('tag', 'main', {
+    type: 'customHtml',
+    html: '<script>1</script>',
+    consent: { status: 'needed', types: ['ad_storage', 'analytics_storage'] },
+  });
+  assert.deepEqual(gtm.consentSettings, {
+    consentStatus: 'needed',
+    consentType: { type: 'list', list: [{ type: 'template', value: 'ad_storage' }, { type: 'template', value: 'analytics_storage' }] },
+  });
+  assert.deepEqual(fromGtmPayload('tag', gtm), {
+    type: 'customHtml',
+    html: '<script>1</script>',
+    trigger: [],
+    exceptTrigger: [],
+    consent: { status: 'needed', types: ['ad_storage', 'analytics_storage'] },
+  });
+});
+
+test('tag consent (notNeeded) round-trips without a types list', () => {
+  const gtm = toGtmPayload('tag', 'main', { type: 'customHtml', html: '<script>1</script>', consent: { status: 'notNeeded' } });
+  assert.deepEqual(gtm.consentSettings, { consentStatus: 'notNeeded' });
+  assert.deepEqual(fromGtmPayload('tag', gtm).consent, { status: 'notNeeded' });
+});
+
+test('a tag with no consent declared has no consentSettings and no drift from GTM\'s default notSet', () => {
+  const gtm = toGtmPayload('tag', 'main', { type: 'customHtml', html: '<script>1</script>' });
+  assert.equal(gtm.consentSettings, undefined);
+  // GTM stamps every tag with consentSettings: {consentStatus: 'notSet'} even when it wasn't sent.
+  assert.equal(fromGtmPayload('tag', { ...gtm, consentSettings: { consentStatus: 'notSet' } }).consent, undefined);
+});
+
+test('consentInit trigger maps as a bare type', () => {
+  const gtm = toGtmPayload('trigger', 'consent-init', { type: 'consentInit' });
+  assert.deepEqual(gtm, { name: 'consent-init', type: 'consentInit' });
+  assert.deepEqual(fromGtmPayload('trigger', gtm), { type: 'consentInit' });
+});
+
 test('unknown type throws rather than silently producing a bad payload', () => {
   assert.throws(() => toGtmPayload('tag', 'x', { type: 'somethingElse' }), /No GTM payload mapping/);
 });

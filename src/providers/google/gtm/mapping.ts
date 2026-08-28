@@ -25,6 +25,7 @@ const BARE_TRIGGER_TYPES = [
   'scrollDepth',
   'historyChange',
   'jsError',
+  'consentInit',
 ] as const;
 
 /** Firing behavior shared by every tag type: priority, once-per-X, scheduling, setup/teardown tags. */
@@ -42,6 +43,13 @@ function resolveTagFiringBehavior(desiredState: Record<string, unknown>): GtmObj
   if (setupTags && setupTags.length > 0) extra.setupTag = setupTags.map((tagName) => ({ tagName, stopOnSetupFailure: true }));
   const teardownTags = desiredState.teardownTags as string[] | undefined;
   if (teardownTags && teardownTags.length > 0) extra.teardownTag = teardownTags.map((tagName) => ({ tagName }));
+  const consent = desiredState.consent as { status: 'needed' | 'notNeeded'; types?: string[] } | undefined;
+  if (consent) {
+    extra.consentSettings =
+      consent.status === 'needed'
+        ? { consentStatus: 'needed', consentType: { type: 'list', list: (consent.types ?? []).map((value) => ({ type: 'template', value })) } }
+        : { consentStatus: 'notNeeded' };
+  }
   return extra;
 }
 
@@ -58,6 +66,14 @@ function recoverTagFiringBehavior(object: GtmObject): Record<string, unknown> {
   if (setupTag && setupTag.length > 0) extra.setupTags = setupTag.map((t) => t.tagName);
   const teardownTag = object.teardownTag as Array<{ tagName: string }> | undefined;
   if (teardownTag && teardownTag.length > 0) extra.teardownTags = teardownTag.map((t) => t.tagName);
+  const consentSettings = object.consentSettings as
+    | { consentStatus?: string; consentType?: { list?: Array<{ value?: string }> } }
+    | undefined;
+  if (consentSettings?.consentStatus === 'needed') {
+    extra.consent = { status: 'needed', types: (consentSettings.consentType?.list ?? []).map((t) => t.value).filter(Boolean) };
+  } else if (consentSettings?.consentStatus === 'notNeeded') {
+    extra.consent = { status: 'notNeeded' };
+  }
   return extra;
 }
 

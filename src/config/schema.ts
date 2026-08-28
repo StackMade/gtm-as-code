@@ -13,13 +13,23 @@ export interface EventDef {
   description?: string;
   keyEvent?: boolean;
   parameters: Record<string, EventParameterDef>;
+  /** Consent the event's compiled `ga4Event` tag requires before firing. */
+  consent?: ConsentDef;
 }
 
 export interface ResourceDef {
   type: string;
   /** Folder name (from `gtm.folders`) this resource is organized under. */
   folder?: string;
+  /** Require `--allow-destroy-protected` (beyond `--allow-destroy`) before `apply` may delete this resource. */
+  protected?: boolean;
   [key: string]: unknown;
+}
+
+export interface ConsentDef {
+  status: 'needed' | 'notNeeded';
+  /** Consent types this tag needs granted (GA4's `ad_storage`, `analytics_storage`, etc). Required when `status` is `needed`. */
+  types?: string[];
 }
 
 export interface TagDef extends ResourceDef {
@@ -30,6 +40,8 @@ export interface TagDef extends ResourceDef {
   setupTags?: string[];
   /** Tag names that fire after this tag (GTM's `teardownTag`). */
   teardownTags?: string[];
+  /** Consent this tag requires before firing (GTM's `consentSettings`). */
+  consent?: ConsentDef;
 }
 
 export interface DimensionDef {
@@ -68,7 +80,7 @@ export interface AnalyticsConfig {
 type Json = Record<string, unknown>;
 
 const TOP_LEVEL_KEYS = ['version', 'project', 'google', 'events', 'gtm', 'ga4'];
-const EVENT_KEYS = ['description', 'keyEvent', 'parameters'];
+const EVENT_KEYS = ['description', 'keyEvent', 'parameters', 'consent'];
 const PARAMETER_KEYS = ['type', 'dimension', 'optional'];
 const PARAMETER_TYPES = ['string', 'number', 'boolean'] as const;
 const DIMENSION_KEYS = ['scope', 'parameter'];
@@ -115,6 +127,8 @@ export function validateConfig(parsed: ParsedConfig): AnalyticsConfig {
   const ga4 = validateGa4(parsed, root.ga4 ?? {});
 
   checkCrossReferences(parsed, gtm, ga4);
+  checkConsentLint(parsed, gtm);
+  checkPiiLint(parsed, events);
 
   return {
     version: 1,
@@ -165,7 +179,8 @@ function validateEvents(parsed: ParsedConfig, raw: unknown): Record<string, Even
     const keyEvent =
       def.keyEvent !== undefined ? requireBoolean(parsed, def.keyEvent, [...path, 'keyEvent']) : undefined;
     const parameters = validateParameters(parsed, def.parameters ?? {}, [...path, 'parameters']);
-    events[name] = { description, keyEvent, parameters };
+    const consent = def.consent !== undefined ? validateConsent(parsed, def.consent, [...path, 'consent']) : undefined;
+    events[name] = { description, keyEvent, parameters, consent };
   }
   return events;
 }
@@ -240,7 +255,8 @@ function validateResourceMap(
     const def = requireObject(parsed, value, itemPath);
     const type = requireString(parsed, def.type, [...itemPath, 'type']);
     const folder = def.folder !== undefined ? requireString(parsed, def.folder, [...itemPath, 'folder']) : undefined;
-    result[name] = { ...def, type, folder };
+    const isProtected = def.protected !== undefined ? requireBoolean(parsed, def.protected, [...itemPath, 'protected']) : undefined;
+    result[name] = { ...def, type, folder, ...(isProtected !== undefined ? { protected: isProtected } : {}) };
   }
   return result;
 }
@@ -267,9 +283,44 @@ function validateTagMap(parsed: ParsedConfig, raw: unknown, path: string[]): Rec
         ? requireStringArray(parsed, def.teardownTags, [...itemPath, 'teardownTags'])
         : undefined;
     const folder = def.folder !== undefined ? requireString(parsed, def.folder, [...itemPath, 'folder']) : undefined;
-    result[name] = { ...def, type, trigger, exceptTrigger, setupTags, teardownTags, folder };
+    const consent = def.consent !== undefined ? validateConsent(parsed, def.consent, [...itemPath, 'consent']) : undefined;
+    const isProtected = def.protected !== undefined ? requireBoolean(parsed, def.protected, [...itemPath, 'protected']) : undefined;
+    result[name] = {
+      ...def,
+      type,
+      trigger,
+      exceptTrigger,
+      setupTags,
+      teardownTags,
+      folder,
+      consent,
+      ...(isProtected !== undefined ? { protected: isProtected } : {}),
+    };
   }
   return result;
+}
+
+function validateConsent(parsed: ParsedConfig, raw: unknown, path: string[]): ConsentDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, ['status', 'types'], path);
+  const status = requireEnum(parsed, def.status, ['needed', 'notNeeded'] as const, [...path, 'status']);
+  if (status === 'needed') {
+    const types = requireStringArray(parsed, def.types, [...path, 'types']);
+    if (types.length === 0) {
+      fail(parsed, [...path, 'types'], [
+        { label: 'Expected', value: 'at least one consent type' },
+        { label: 'Received', value: 'empty array' },
+      ]);
+    }
+    return { status, types };
+  }
+  if (def.types !== undefined) {
+    fail(parsed, [...path, 'types'], [
+      { label: 'Expected', value: 'no `types` (only used when `status` is `needed`)' },
+      { label: 'Received', value: 'an array' },
+    ]);
+  }
+  return { status };
 }
 
 function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4'] {
@@ -324,6 +375,63 @@ function validateMetrics(
 
 // `setupTags`/`teardownTags` can cycle (tag A sets up B, B sets up A); that is caught by
 // `buildDependencyGraph`'s topological sort (`CircularDependencyError`), not here.
+// Tag types that load a Google measurement/advertising script, so they need an explicit consent
+// call before firing. Other tag types (customHtml, customImage, ...) are too generic to guess at.
+const TAG_TYPES_THAT_NEED_CONSENT = ['ga4Event', 'googleTag'] as const;
+
+function checkConsentLint(parsed: ParsedConfig, gtm: AnalyticsConfig['gtm']): void {
+  for (const [name, tag] of Object.entries(gtm.tags)) {
+    if (!(TAG_TYPES_THAT_NEED_CONSENT as readonly string[]).includes(tag.type)) continue;
+    if (tag.consent === undefined) {
+      fail(parsed, ['gtm', 'tags', name], [
+        { label: 'Missing consent', value: `a "${tag.type}" tag needs a \`consent\` block` },
+        { label: 'Fix', value: 'declare `consent: {status: needed, types: [...]}`, or `consent: {status: notNeeded}` to waive it explicitly' },
+      ]);
+    }
+  }
+}
+
+// Substrings of GA4 event/user parameter names that suggest personal data. GA4 forbids sending
+// PII in event parameters and responds by deleting the offending data, not just warning about it.
+const PII_NAME_PATTERNS = [
+  'email',
+  'phone',
+  'address',
+  'street',
+  'zip',
+  'postal',
+  'ssn',
+  'social_security',
+  'passport',
+  'credit_card',
+  'card_number',
+  'cvv',
+  'password',
+  'first_name',
+  'last_name',
+  'full_name',
+  'birth',
+  'national_id',
+  'tax_id',
+  'ip_address',
+];
+
+function checkPiiLint(parsed: ParsedConfig, events: Record<string, EventDef>): void {
+  for (const [eventName, event] of Object.entries(events)) {
+    for (const paramName of Object.keys(event.parameters)) {
+      const normalized = paramName.toLowerCase();
+      const match = PII_NAME_PATTERNS.find((pattern) => normalized.includes(pattern));
+      if (match) {
+        fail(parsed, ['events', eventName, 'parameters', paramName], [
+          { label: 'Parameter name suggests personal data', value: paramName },
+          { label: 'Matched pattern', value: match },
+          { label: 'Fix', value: 'rename it, or drop it: GA4 deletes event data that carries PII rather than just rejecting it' },
+        ]);
+      }
+    }
+  }
+}
+
 function checkCrossReferences(
   parsed: ParsedConfig,
   gtm: AnalyticsConfig['gtm'],

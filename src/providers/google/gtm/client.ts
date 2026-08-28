@@ -98,14 +98,15 @@ export class GtmClient {
     for (const object of objects) {
       const ownership = parseOwnershipNotes(object.notes);
       if (!ownership) continue;
-      resources.push({ id: ownership.resourceId, type: KINDS[kind].type, provider: 'google', desiredState: object });
+      const desiredState = ownership.protected ? { ...object, __protected: true } : object;
+      resources.push({ id: ownership.resourceId, type: KINDS[kind].type, provider: 'google', desiredState });
     }
     return resources;
   }
 
   /** Creates a GTM object, stamping it with ownership metadata for `resourceId`. */
-  async create(kind: GtmKind, resourceId: string, payload: GtmObject): Promise<GtmObject> {
-    const body = { ...payload, notes: buildOwnershipNotes(resourceId, payload.notes) };
+  async create(kind: GtmKind, resourceId: string, payload: GtmObject, isProtected?: boolean): Promise<GtmObject> {
+    const body = { ...payload, notes: buildOwnershipNotes(resourceId, isProtected, payload.notes) };
     try {
       const response = await this.auth.request<GtmObject>({ url: this.collectionUrl(kind), method: 'POST', data: body });
       return response.data;
@@ -115,8 +116,8 @@ export class GtmClient {
   }
 
   /** Updates an existing GTM object by its GTM-assigned id, preserving ownership metadata. */
-  async update(kind: GtmKind, resourceId: string, gtmId: string, payload: GtmObject): Promise<GtmObject> {
-    const body = { ...payload, notes: buildOwnershipNotes(resourceId, payload.notes) };
+  async update(kind: GtmKind, resourceId: string, gtmId: string, payload: GtmObject, isProtected?: boolean): Promise<GtmObject> {
+    const body = { ...payload, notes: buildOwnershipNotes(resourceId, isProtected, payload.notes) };
     try {
       const response = await this.auth.request<GtmObject>({
         url: `${this.collectionUrl(kind)}/${gtmId}`,

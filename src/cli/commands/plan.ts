@@ -118,6 +118,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
       const gtmId = object[gtmIdField(kind)];
       if (typeof gtmId === 'string') gtmIds[`${kind}:${resource.id}`] = gtmId;
       const desiredState = fromGtmPayload(kind, object, { triggerGtmIdToLogicalId, folderGtmIdToLogicalId });
+      if (object.__protected) desiredState.protected = true;
       remote.push({ ...resource, desiredState });
     }
   }

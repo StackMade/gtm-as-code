@@ -22,6 +22,8 @@ events:
       form:
         type: string
         dimension: true
+    consent:
+      status: notNeeded
 `;
 
 const CHANGED_YAML = `
@@ -41,12 +43,16 @@ events:
       form:
         type: string
         dimension: true
+    consent:
+      status: notNeeded
   purchase:
     keyEvent: true
     parameters:
       value:
         type: number
         dimension: true
+    consent:
+      status: notNeeded
 `;
 
 function writeFixture(name: string, contents: string): string {

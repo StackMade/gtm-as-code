@@ -39,6 +39,15 @@ export async function apply(opts: GlobalOptions): Promise<void> {
       );
     }
 
+    const protectedDeletes = findProtectedDeletes(result.changes);
+    if (protectedDeletes.length > 0 && !opts.allowDestroyProtected) {
+      throw new Error(
+        'This apply would delete protected resource(s): ' +
+          protectedDeletes.map((c) => c.resource.id).join(', ') +
+          '. Pass --allow-destroy-protected to allow it.',
+      );
+    }
+
     printDestructiveWarnings(result.changes);
     console.log('Apply these changes?\n');
     console.log(`${result.counts.create} to create`);
@@ -58,6 +67,14 @@ export async function apply(opts: GlobalOptions): Promise<void> {
     printFailure(error);
     process.exitCode = 1;
   }
+}
+
+/** Deletes of resources marked `protected: true`, which need `--allow-destroy-protected` on top of `--allow-destroy`. */
+export function findProtectedDeletes(changes: Change[]): Array<Extract<Change, { operation: 'delete' }>> {
+  return changes.filter(
+    (c): c is Extract<Change, { operation: 'delete' }> =>
+      c.operation === 'delete' && (c.resource.desiredState as Record<string, unknown>)?.protected === true,
+  );
 }
 
 function printDestructiveWarnings(changes: Change[]): void {
@@ -116,7 +133,8 @@ async function execute(result: PlanResult): Promise<void> {
       triggerGtmIds,
       folderGtmIds,
     });
-    const created = await gtm.create(kind, change.resource.id, payload);
+    const isProtected = (change.resource.desiredState as Record<string, unknown>).protected === true;
+    const created = await gtm.create(kind, change.resource.id, payload, isProtected);
     const gtmId = created[gtmIdField(kind)];
     if (typeof gtmId === 'string') {
       if (kind === 'trigger') triggerGtmIds[change.resource.id] = gtmId;
@@ -143,7 +161,8 @@ async function execute(result: PlanResult): Promise<void> {
         triggerGtmIds,
         folderGtmIds,
       });
-      await gtm.update(kind, id, gtmId, payload);
+      const isProtected = (change.after.desiredState as Record<string, unknown>).protected === true;
+      await gtm.update(kind, id, gtmId, payload, isProtected);
     }
   }
   for (const change of ga4Changes.filter(isUpdate)) {

@@ -73,6 +73,7 @@ program
   .description('apply the config to GTM/GA4')
   .option('--auto-approve', 'skip the confirmation prompt', false)
   .option('--allow-destroy', 'allow apply to include deletes', false)
+  .option('--allow-destroy-protected', 'allow apply to delete resources marked `protected: true`', false)
   .action(async function (this: Command) {
     await apply(globalOptions(this));
   });
