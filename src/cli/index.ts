@@ -10,6 +10,7 @@ import { apply } from './commands/apply.js';
 import { publish } from './commands/publish.js';
 import { rollback } from './commands/rollback.js';
 import { pull } from './commands/pull.js';
+import { adopt } from './commands/adopt.js';
 import type { GlobalOptions } from './options.js';
 
 // package.json is the only place the version is written down; `npm version` bumps it there.
@@ -100,6 +101,14 @@ program
   .action(async function (this: Command) {
     const opts = this.opts<{ resource?: string; out?: string; fromExport?: string }>();
     await pull({ ...globalOptions(this), resource: opts.resource, out: opts.out, fromExport: opts.fromExport });
+  });
+
+program
+  .command('adopt')
+  .description('stamp ownership on a resource pull already brought into the config, so plan/apply treat it as managed')
+  .argument('<kindAndId>', 'e.g. tag:generate_lead_tag')
+  .action(async function (this: Command, resourceArg: string) {
+    await adopt(resourceArg, globalOptions(this));
   });
 
 await program.parseAsync();

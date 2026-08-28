@@ -253,6 +253,19 @@ property, and prints the result. Never creates, updates, or deletes anything.
 See [Output contract](#output-contract) below for `--format json`, `--format markdown`, and exit
 codes.
 
+### `gtm-code diff <fileA> <fileB> [--format text|json|markdown]`
+
+Compares two config files against each other (`fileA` as the baseline, `fileB` as desired), the
+same way `plan` compares a config against live state. No network calls, no credentials needed. Exit
+code `2` if the two files differ, `1` on a load/validation error, `0` if they resolve to the same
+resources.
+
+### `gtm-code drift [--format json|markdown]`
+
+The read-only, CI-friendly sibling of `plan`. Authorizes with the same read-only scopes, compares
+live state against config, and reports whether they've diverged, without printing the full plan
+detail `plan` does. Exit code `1` if drift is found (or on error), `0` if clean.
+
 ### `gtm-code apply [--auto-approve] [--allow-destroy]`
 
 Runs the same diff as `plan`, then executes it. Deletes go first (tags, then triggers, then
@@ -285,6 +298,28 @@ Republishes the container version that was live immediately before the current o
 versions and prompts `Continue? [y/N]` unless `--auto-approve` is passed. Does nothing to the
 workspace or to `.analytics/state.json`; it only changes which already-existing version is live, so
 it's close to free to run once `publish` has created a version history to roll back through.
+
+### `gtm-code pull [--resource <kindAndId>] [--out <path>] [--from-export <path>]`
+
+Reverse-generates YAML from a live GTM container and GA4 property. It's the starting point for
+putting an existing setup under this tool's management. Three modes, mutually exclusive: no flags pulls
+everything into the resolved config; `--resource tag:generate_lead_tag` pulls one resource into the
+existing config; `--from-export path.json` ingests a GTM UI container export (Admin > Export
+Container) instead of calling the API, so it needs no GTM permissions at all. `--out` overrides
+where the config is written (default: the resolved config path). Logical ids are derived by
+slugifying each object's GTM name, with `_2`/`_3` suffixes on collisions. Asks before overwriting an
+existing output file, except when pulling a single `--resource`, which merges in place. Requires the
+same read-only scopes as `plan`, unless you're using `--from-export`.
+
+### `gtm-code adopt <kindAndId>`
+
+Stamps ownership on a resource `pull` already brought into the config, so `plan`/`apply` start
+treating it as managed. It's the one write in an otherwise read-only pull/adopt flow. Takes the same
+`<kind>:<id>` argument as `pull --resource` (e.g. `tag:generate_lead_tag`). For GTM kinds
+(`folder`/`variable`/`trigger`/`tag`) it re-submits the matching live object with an ownership marker
+in its `notes` field, with no functional change to the object itself. For GA4 kinds
+(`dimension`/`metric`/`keyEvent`) it records the resource as managed in `.analytics/state.json`
+instead, with no live write. Prompts `Continue? [y/N]` before writing either way.
 
 ## State
 
@@ -413,14 +448,12 @@ GA4 ownership tracking works in CI as long as `.analytics/state.json` is committ
 
 Not available yet. These are known gaps, so please don't file a bug for them:
 
-- `gtm-code pull` (import existing GTM/GA4 resources into config)
-- `gtm-code diff`, `gtm-code verify`, `gtm-code docs`, `gtm-code doctor`
+- `gtm-code verify`, `gtm-code docs`, `gtm-code doctor`
 - `gtm-code generate` (typed event helpers)
 - `gtm-code migrate`
-- Drift detection
 - GTM custom templates; conversion linker and community-gallery template tags (their payloads need
-  fields — Floodlight ids, a gallery template's own parameter schema — this tool can't live-verify
-  against a sandbox container). See [Schema](#schema) for what is covered
+  fields, like Floodlight ids or a gallery template's own parameter schema, this tool can't
+  live-verify against a sandbox container). See [Schema](#schema) for what is covered
 - Consent Mode settings
 - GA4 data streams, enhanced measurement, audiences, and property settings
 
