@@ -1,5 +1,5 @@
 import { ConfigError } from './errors.js';
-import { locateLine, type ParsedConfig } from './parser.js';
+import { locateLine, locateFile, type ParsedConfig } from './parser.js';
 
 const VAR_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}/g;
 
@@ -41,7 +41,7 @@ function interpolateString(
     const resolved = env[name];
     if (resolved !== undefined) return resolved;
     if (fallback !== undefined) return fallback;
-    throw new ConfigError(parsed.file, locateLine(parsed, path), path.join('.'), [
+    throw new ConfigError(locateFile(parsed, path), locateLine(parsed, path), path.join('.'), [
       { label: 'Missing environment variable', value: name },
     ]);
   });

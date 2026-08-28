@@ -245,11 +245,18 @@ relative to its value, because the data is already there.
   `{ event, ...params }` onto `window.dataLayer`. Stdout by default, `--out` to write a file. So a
   typo in an event name, or a missing required parameter, is a compile error rather than missing
   data in GA4.
+- Config composition. Done. `extends: <path|array>` at the config root, resolved in `loadConfig`
+  before validation runs, so every command gets it without per-command changes. Merges
+  `events:`/`gtm.{variables,triggers,tags,folders}:`/`ga4.{dimensions,metrics,keyEvents}:` from the
+  target files; root wins over an extends target, and two extends targets colliding on the same
+  entry is a validation error rather than silent last-wins. An extends target can't set identity or
+  credential fields (`version`, `project`, `google.*`, `gtm.builtInVariables`), so a shared pack
+  never carries another repo's account IDs. `ParsedConfig` gained an `origins` map from entry to the
+  file it was actually defined in, so a validation error on merged-in content still points at the
+  right file and line instead of the root config's.
 - Event packs. GA4 recommended events, and ecommerce in particular, shipped as includable modules
   with typed item arrays. Ecommerce is where the parameter shapes are strict, hand-written most
   often, and wrong most often.
-- Config composition. An `extends:` or `include:` mechanism so packs, and shared internal
-  conventions, can be reused across repositories.
 
 ## 0.7: GA4 coverage
 

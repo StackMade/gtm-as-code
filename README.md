@@ -154,6 +154,25 @@ A reference with no default that resolves to an unset variable fails validation.
 account, container, and property IDs, and any secrets, out of the YAML. Put them in environment
 variables instead, as `init`'s scaffold does.
 
+### Config composition (`extends:`)
+
+A config can pull in `events:`/`gtm.{variables,triggers,tags,folders}:`/`ga4.{dimensions,metrics,keyEvents}:`
+entries from other YAML files, for shared conventions or reusable packs:
+
+```yaml
+extends: ./packs/ecommerce.yaml
+# or: extends: [./packs/ecommerce.yaml, ./packs/consent.yaml]
+```
+
+Paths resolve relative to the file that contains the `extends:` key, and an extends target can
+itself extend further files. The root config always wins: an entry it defines directly can't be
+overridden by an extends target, and two extends targets can't define the same entry either, both
+fail validation rather than picking one silently. An extends target may only contain the sections
+listed above, nothing that identifies or authenticates a specific GTM/GA4 property (`version`,
+`project`, `google.*`, `gtm.builtInVariables`), so a shared pack never carries another repo's
+account IDs by accident. Validation errors on an entry pulled in this way point at the file and
+line it actually came from, not the root config.
+
 ### Schema
 
 ```yaml

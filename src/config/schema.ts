@@ -1,5 +1,5 @@
 import { ConfigError } from './errors.js';
-import { locateLine, type ParsedConfig } from './parser.js';
+import { locateLine, locateFile, type ParsedConfig } from './parser.js';
 import { closestMatch } from './suggest.js';
 import { BUILT_IN_VARIABLE_NAMES } from '../providers/google/gtm/builtin-variables.js';
 
@@ -615,7 +615,7 @@ function checkCrossReferences(
 }
 
 function fail(parsed: ParsedConfig, path: string[], body: { label: string; value: string }[]): never {
-  throw new ConfigError(parsed.file, locateLine(parsed, path), path.join('.'), body);
+  throw new ConfigError(locateFile(parsed, path), locateLine(parsed, path), path.join('.'), body);
 }
 
 function isPlainObject(value: unknown): value is Json {
