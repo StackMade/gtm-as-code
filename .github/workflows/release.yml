@@ -80,6 +80,17 @@ jobs:
       # prepack rebuilds dist/ from the clean checkout, and provenance is attached
       # automatically under OIDC.
       - uses: changesets/action/publish@v2
+        id: changesets
         with:
           script: npm run release
           create-github-releases: true
+
+      - name: Notify companion action
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_REPO_DISPATCH_TOKEN }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          gh api repos/StackMade/gtm-as-code-action/dispatches \
+            -f event_type=cli-released \
+            -f "client_payload[version]=$version"
