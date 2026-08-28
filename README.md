@@ -237,6 +237,12 @@ Validation also catches:
   block, since it would otherwise load a Google measurement script with no consent check,
 - an event parameter whose name suggests personal data (`email`, `phone`, `address`, and similar).
   GA4 responds to PII in event parameters by deleting the data, not just rejecting the request.
+- GA4 naming and limit violations: an event or parameter name that doesn't start with a letter or
+  contains characters other than letters/digits/underscores, a name over 40 characters, a reserved
+  event name (`page_view`, `click`, `first_visit`, and the rest of GA4's automatically-collected
+  set), a reserved parameter name or prefix (`user_id`, `ga_*`, `firebase_*`, `google_*`, `gtag.*`),
+  an event with more than 25 parameters, or (checked after `events.*` compiles, since hand-written
+  and event-derived dimensions share one cap) more than 50 event-scoped custom dimensions.
 
 ## CLI reference
 

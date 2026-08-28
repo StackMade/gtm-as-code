@@ -225,9 +225,16 @@ rather read a diff than click through 40 tags.
 Everything here reads the config and produces something other than an API call. Cheap to build
 relative to its value, because the data is already there.
 
-- GA4 limits and naming linter, inside `validate`. Reserved event names, name-length caps, the
-  per-event parameter cap, the per-property custom dimension cap, snake_case conventions. All
-  offline, zero API cost, and it catches at review time what would otherwise fail mid-`apply`.
+- GA4 limits and naming linter, inside `validate`. Done. Reserved event names and prefixes,
+  reserved parameter names and prefixes (`ga_*`, `firebase_*`, `google_*`, `gtag.*`), the
+  letters/digits/underscore-starting-with-a-letter name pattern, the 40-character name cap, the
+  per-event 25-parameter cap, and (checked in `compile.ts` once `events.*` has expanded, since
+  hand-written and event-derived dimensions share one budget) the 50-event-scoped-custom-dimension
+  cap per property. All limits verified against Google's current published docs, not recalled from
+  training data. `snake_case` naming was deliberately left unenforced: it's a convention, not an
+  API-enforced limit, and a hard-fail linter would break real configs and CI on a minor version
+  bump. All offline, zero API cost, and it catches at review time what would otherwise fail
+  mid-`apply` or get silently rejected/scrubbed by GA4.
 - `gtm-code docs`. Generate a data dictionary, in markdown or HTML, from `events:`. Every analytics
   team maintains this by hand in a spreadsheet that is wrong within a month.
 - `gtm-code generate`. Typed event helpers from `events:`: TypeScript types plus a `track()`

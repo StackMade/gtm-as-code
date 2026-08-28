@@ -97,6 +97,30 @@ test('an event explicitly waiving consent (notNeeded) compiles without throwing'
   assert.deepEqual(compiled.gtm.tags.generate_lead.consent, { status: 'notNeeded' });
 });
 
+test('more than 50 event-scoped custom dimensions (hand-written + event-derived) throws', () => {
+  const dimensions: AnalyticsConfig['ga4']['dimensions'] = {};
+  for (let i = 0; i < 51; i++) dimensions[`dim_${i}`] = { scope: 'event', parameter: `dim_${i}` };
+  const config = baseConfig({ ga4: { dimensions, metrics: {}, keyEvents: {} } });
+
+  assert.throws(() => compileEvents(config, 'analytics.yaml'), ConfigError);
+});
+
+test('exactly 50 event-scoped custom dimensions compiles without throwing', () => {
+  const dimensions: AnalyticsConfig['ga4']['dimensions'] = {};
+  for (let i = 0; i < 50; i++) dimensions[`dim_${i}`] = { scope: 'event', parameter: `dim_${i}` };
+  const config = baseConfig({ ga4: { dimensions, metrics: {}, keyEvents: {} } });
+
+  assert.doesNotThrow(() => compileEvents(config, 'analytics.yaml'));
+});
+
+test('user-scoped custom dimensions do not count toward the event-scoped cap', () => {
+  const dimensions: AnalyticsConfig['ga4']['dimensions'] = {};
+  for (let i = 0; i < 60; i++) dimensions[`dim_${i}`] = { scope: 'user', parameter: `dim_${i}` };
+  const config = baseConfig({ ga4: { dimensions, metrics: {}, keyEvents: {} } });
+
+  assert.doesNotThrow(() => compileEvents(config, 'analytics.yaml'));
+});
+
 test('derived id colliding with an unrelated explicit resource in another section throws', () => {
   const config = baseConfig({
     events: {

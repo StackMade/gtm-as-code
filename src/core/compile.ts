@@ -84,12 +84,26 @@ export function compileEvents(config: AnalyticsConfig, file: string): AnalyticsC
     }
   }
 
+  // GA4 caps a property at 50 event-scoped custom dimensions; check the merged total (hand-written
+  // `ga4.dimensions` plus dimensions synthesized from `events.*.parameters[].dimension`), since
+  // either half alone can look fine while the union exceeds the cap.
+  const eventScopedCount = Object.values(dimensions).filter((d) => d.scope === 'event').length;
+  if (eventScopedCount > GA4_MAX_EVENT_SCOPED_DIMENSIONS) {
+    throw new ConfigError(file, undefined, 'ga4.dimensions', [
+      { label: 'Too many event-scoped custom dimensions', value: `${eventScopedCount} (hand-written + event-derived)` },
+      { label: 'Limit', value: `${GA4_MAX_EVENT_SCOPED_DIMENSIONS} per property` },
+    ]);
+  }
+
   return {
     ...config,
     gtm: { variables, triggers, tags, folders: config.gtm.folders, builtInVariables: config.gtm.builtInVariables },
     ga4: { ...config.ga4, dimensions, keyEvents },
   };
 }
+
+// Verified against support.google.com/analytics/answer/13316687 (2026-08-28).
+const GA4_MAX_EVENT_SCOPED_DIMENSIONS = 50;
 
 function* sectionEntries(config: AnalyticsConfig): Generator<[string, string]> {
   for (const id of Object.keys(config.gtm.variables)) yield [id, `gtm.variables.${id}`];

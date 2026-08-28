@@ -131,6 +131,7 @@ export function validateConfig(parsed: ParsedConfig): AnalyticsConfig {
   checkCrossReferences(parsed, gtm, ga4);
   checkConsentLint(parsed, gtm);
   checkPiiLint(parsed, events);
+  checkGa4NamingLint(parsed, events);
 
   return {
     version: 1,
@@ -430,6 +431,113 @@ function checkPiiLint(parsed: ParsedConfig, events: Record<string, EventDef>): v
           { label: 'Parameter name suggests personal data', value: paramName },
           { label: 'Matched pattern', value: match },
           { label: 'Fix', value: 'rename it, or drop it: GA4 deletes event data that carries PII rather than just rejecting it' },
+        ]);
+      }
+    }
+  }
+}
+
+// GA4 naming/limit rules, verified against support.google.com/analytics/answer/13316687
+// (2026-08-28): names start with a letter and contain only letters, digits, underscores;
+// event and parameter names cap at 40 characters; an event carries at most 25 parameters;
+// a property carries at most 50 event-scoped custom dimensions (checked in `compile.ts`,
+// where event-derived and hand-written dimensions are merged).
+const GA4_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
+const GA4_NAME_MAX_LENGTH = 40;
+const GA4_MAX_PARAMETERS_PER_EVENT = 25;
+
+// Automatically-collected event names GA4 refuses to accept as custom event names.
+const GA4_RESERVED_EVENT_NAMES = [
+  'ad_impression',
+  'app_remove',
+  'app_store_refund',
+  'app_store_subscription_cancel',
+  'app_store_subscription_renew',
+  'click',
+  'error',
+  'file_download',
+  'first_open',
+  'first_visit',
+  'form_start',
+  'form_submit',
+  'in_app_purchase',
+  'page_view',
+  'scroll',
+  'session_start',
+  'user_engagement',
+  'view_complete',
+  'video_progress',
+  'video_start',
+  'view_search_results',
+  'ad_activeview',
+  'ad_click',
+  'ad_exposure',
+  'app_exception',
+  'app_install',
+  'app_update',
+  'firebase_campaign',
+  'os_update',
+];
+const GA4_RESERVED_EVENT_PREFIXES = ['dynamic_link_', 'notification_'];
+
+// GA4 parameter names cannot start with these, and these exact names are reserved for GA4 itself.
+const GA4_RESERVED_PARAMETER_PREFIXES = ['_', 'firebase_', 'ga_', 'google_', 'gtag.'];
+const GA4_RESERVED_PARAMETER_NAMES = ['cid', 'currency', 'customer_id', 'dclid', 'gclid', 'query_id', 'session_id', 'uid', 'user_id'];
+
+function checkGa4NamingLint(parsed: ParsedConfig, events: Record<string, EventDef>): void {
+  for (const [eventName, event] of Object.entries(events)) {
+    const eventPath = ['events', eventName];
+    if (!GA4_NAME_PATTERN.test(eventName)) {
+      fail(parsed, eventPath, [
+        { label: 'Invalid GA4 event name', value: eventName },
+        { label: 'Fix', value: 'start with a letter, use only letters, digits and underscores' },
+      ]);
+    }
+    if (eventName.length > GA4_NAME_MAX_LENGTH) {
+      fail(parsed, eventPath, [
+        { label: 'GA4 event name too long', value: `${eventName} (${eventName.length} chars)` },
+        { label: 'Limit', value: `${GA4_NAME_MAX_LENGTH} characters` },
+      ]);
+    }
+    if (
+      GA4_RESERVED_EVENT_NAMES.includes(eventName) ||
+      GA4_RESERVED_EVENT_PREFIXES.some((prefix) => eventName.startsWith(prefix))
+    ) {
+      fail(parsed, eventPath, [
+        { label: 'Reserved GA4 event name', value: eventName },
+        { label: 'Fix', value: 'this name is automatically collected by GA4; pick a different name for a custom event' },
+      ]);
+    }
+
+    const parameterNames = Object.keys(event.parameters);
+    if (parameterNames.length > GA4_MAX_PARAMETERS_PER_EVENT) {
+      fail(parsed, [...eventPath, 'parameters'], [
+        { label: 'Too many parameters', value: `${parameterNames.length} declared` },
+        { label: 'Limit', value: `${GA4_MAX_PARAMETERS_PER_EVENT} parameters per event` },
+      ]);
+    }
+
+    for (const paramName of parameterNames) {
+      const paramPath = [...eventPath, 'parameters', paramName];
+      if (!GA4_NAME_PATTERN.test(paramName)) {
+        fail(parsed, paramPath, [
+          { label: 'Invalid GA4 parameter name', value: paramName },
+          { label: 'Fix', value: 'start with a letter, use only letters, digits and underscores' },
+        ]);
+      }
+      if (paramName.length > GA4_NAME_MAX_LENGTH) {
+        fail(parsed, paramPath, [
+          { label: 'GA4 parameter name too long', value: `${paramName} (${paramName.length} chars)` },
+          { label: 'Limit', value: `${GA4_NAME_MAX_LENGTH} characters` },
+        ]);
+      }
+      if (
+        GA4_RESERVED_PARAMETER_NAMES.includes(paramName) ||
+        GA4_RESERVED_PARAMETER_PREFIXES.some((prefix) => paramName.startsWith(prefix))
+      ) {
+        fail(parsed, paramPath, [
+          { label: 'Reserved GA4 parameter name', value: paramName },
+          { label: 'Fix', value: 'GA4 reserves this name (or prefix) for its own use; pick a different parameter name' },
         ]);
       }
     }

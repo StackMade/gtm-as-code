@@ -127,6 +127,71 @@ ga4:
   assert.equal(config.ga4.metrics.lead_value.protected, true);
 });
 
+test('an event named "page_view" fails GA4 naming lint (reserved event name)', () => {
+  const yaml = `
+events:
+  page_view:
+    parameters: {}
+    consent: { status: notNeeded }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('an event name over 40 characters fails GA4 naming lint', () => {
+  const yaml = `
+events:
+  ${'a'.repeat(41)}:
+    parameters: {}
+    consent: { status: notNeeded }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('a parameter named "user_id" fails GA4 naming lint (reserved parameter name)', () => {
+  const yaml = `
+events:
+  generate_lead:
+    parameters:
+      user_id: { type: string }
+    consent: { status: notNeeded }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('a parameter name starting with "ga_" fails GA4 naming lint (reserved prefix)', () => {
+  const yaml = `
+events:
+  generate_lead:
+    parameters:
+      ga_source: { type: string }
+    consent: { status: notNeeded }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('an event with more than 25 parameters fails GA4 naming lint', () => {
+  const params = Array.from({ length: 26 }, (_, i) => `  param_${i}: { type: string }`).join('\n');
+  const yaml = `
+events:
+  generate_lead:
+    parameters:
+${params}
+    consent: { status: notNeeded }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('an ordinary snake_case event with a handful of parameters passes GA4 naming lint', () => {
+  const yaml = `
+events:
+  generate_lead:
+    parameters:
+      form: { type: string }
+    consent: { status: notNeeded }
+`;
+  assert.doesNotThrow(() => validate(yaml));
+});
+
 test('protected must be a boolean', () => {
   const yaml = `
 gtm:
