@@ -123,20 +123,30 @@ needs a deliberate bump of the pinned default in the action repository, followed
 release. It is the thing most likely to silently rot, so it is worth automating early, even if only
 as a scheduled check comparing the pinned default against the latest npm version.
 
-## 0.3: adopt an existing setup
+## Done (0.3): adopt an existing setup
 
-Until this ships the tool only serves greenfield containers, which is almost none of them.
+Until this shipped the tool only served greenfield containers, which is almost none of them.
 
-- `gtm-code pull`. Reverse-generate YAML from a live container and property. Two modes are worth
-  distinguishing: import everything, to bootstrap a config, and import a named resource, to adopt
-  one thing into an existing config.
-- GTM container export ingest. GTM's UI exports a container as JSON. Reading that file is a faster
-  and permission-free adoption path than authorizing an API pull, and it is useful for reviewing a
-  container you don't have credentials for.
-- Drift detection. A read-only check with a non-zero exit when live state has diverged from config.
-  It is the scheduled-CI counterpart to `plan`, and the mitigation for ownership notes being
-  editable by hand.
-- `gtm-code diff`. Config-to-config comparison, for reviewing a change without network access.
+- `gtm-code pull`. Reverse-generate YAML from a live container and property, in two modes: `pull`
+  with no flags imports everything to bootstrap a config, `--resource <kind>:<id>` imports one
+  named resource into an existing config. Deliberately read-only, so it can't write the ownership
+  metadata `plan`/`apply` need on its own — `gtm-code adopt <kind>:<id>` is the separate write step
+  that closes that gap. See [[2026-08-28-gtm-code-pull-and-export-ingest]] and
+  [[2026-08-28-gtm-code-adopt]].
+- GTM container export ingest, as `pull --from-export <path>`. Reads a GTM UI container export
+  (Admin -> Export Container) instead of calling the API — faster, permission-free, GTM only (no
+  GA4 equivalent exists).
+- Drift detection, as `gtm-code drift`. A read-only check with a non-zero exit when live state has
+  diverged from config — the scheduled-CI counterpart to `plan`, and the mitigation (not a fix) for
+  ownership notes being editable by hand.
+- `gtm-code diff <fileA> <fileB>`. Config-to-config comparison, for reviewing a change without
+  network access.
+
+Also shipped alongside 0.3, requested by the first real adopter (PoliczProsto.pl) and blocking its
+migration: `googleTag` configuration parameters and firing triggers (task_034, task_035). Not done:
+built-in-trigger reserved names (the other half of task_035) — no documented API mechanism to
+resolve them and no sandbox available to verify one, see
+[[2026-08-28-builtin-trigger-resolution-deferred]].
 
 ## 0.4: GTM coverage
 
