@@ -1,5 +1,46 @@
 # @stackmade/gtm-as-code
 
+## 0.7.0
+
+### Minor Changes
+
+- 8a084f7: Adds GA4 property and stream settings as config: `ga4.dataRetention`, `ga4.googleSignals`, and
+  `ga4.enhancedMeasurement.{scrollsEnabled, outboundClicksEnabled, siteSearchEnabled,
+videoEngagementEnabled, fileDownloadsEnabled, formInteractionsEnabled}` (the last one scoped to the
+  stream found via the new `ga4.streamWebsiteUrl`, which looks up an existing web data stream by URL
+  without creating one). These settings have no create/delete lifecycle, so `plan`/`drift`/`apply`
+  diff them directly against GA4's live property/stream state rather than treating them as resources.
+- e3d02a2: A tag's `trigger`/`exceptTrigger` can now reference GTM's built-in triggers ("All Pages",
+  "Initialization - All Pages") by name, resolved to their fixed numeric GTM ids rather than looked
+  up in `gtm.triggers`, since GTM never returns these from `triggers.list`. This unblocks a
+  `googleTag` tag firing on GTM's own initialization trigger, without pasting a numeric id into
+  config.
+- 02309d2: Adds `ga4.audiences`: GA4 audience definitions as create/update/archive resources, with a
+  recursive `and`/`or`/`not`/`dimensionOrMetric`/`event` filter tree. `membershipDurationDays`,
+  `exclusionDurationMode`, and `filterClauses` are immutable once created; `plan` fails with an
+  error naming the field rather than attempting a PATCH GA4 would reject. Validation normalizes a
+  clause's filter into the `and`-of-`or`s shape GA4 requires at the top level, so a single condition
+  can be written as a bare leaf without knowing about that requirement.
+- 42c5fcc: Adds `ga4.eventCreateRules`/`ga4.eventEditRules`: GA4 event create/edit rules as create/update/
+  delete resources, nested under the web data stream resolved from `ga4.streamWebsiteUrl`. A create
+  rule's config key is its `destinationEvent`; an edit rule's config key is its `displayName`. Both
+  support a real delete, unlike `ga4.audiences`. An edit rule's `processingOrder` is read-only
+  through the API and isn't part of config.
+
+  Adds `ga4.calculatedMetrics`/`ga4.channelGroups`: GA4 calculated metrics and channel groups as
+  property-scoped create/update/delete resources. A calculated metric's config key is its immutable
+  `calculatedMetricId`; a channel group's config key is its `displayName`, like `ga4.audiences`. Both
+  support a real delete.
+
+### Patch Changes
+
+- 93b2393: Fixes `ga4.streamWebsiteUrl` lookup to ignore a trailing slash, and makes its "stream not found"
+  error list the web stream URLs that actually exist on the property. `plan`/`apply` also now print
+  which GA4 settings changed, not just that some did.
+- a9668e7: Adds a remediation hint for `FAILED_PRECONDITION` errors on `ga4.googleSignals`: Google Signals
+  must be activated on the property through the GA4 UI once before its state can be changed via
+  config. Documents the same requirement in the README.
+
 ## 0.6.0
 
 ### Minor Changes
