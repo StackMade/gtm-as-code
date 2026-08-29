@@ -62,6 +62,8 @@ function countsWith(overrides: Partial<FoundCounts> = {}): FoundCounts {
     audiences: 0,
     eventCreateRules: 0,
     eventEditRules: 0,
+    calculatedMetrics: 0,
+    channelGroups: 0,
     skipped: 0,
     ...overrides,
   };
@@ -82,6 +84,8 @@ test('buildFoundSummary reports one line per kind in PRD order', () => {
     '  0 audiences',
     '  0 event create rules',
     '  0 event edit rules',
+    '  0 calculated metrics',
+    '  0 channel groups',
   ]);
 });
 
@@ -100,7 +104,16 @@ function baseConfig(): Record<string, unknown> {
     },
     events: {},
     gtm: { variables: {}, triggers: { existing_trigger: { type: 'customEvent', eventName: 'x' } }, tags: {} },
-    ga4: { dimensions: {}, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {} },
+    ga4: {
+      dimensions: {},
+      metrics: {},
+      keyEvents: {},
+      audiences: {},
+      eventCreateRules: {},
+      eventEditRules: {},
+      calculatedMetrics: {},
+      channelGroups: {},
+    },
   };
 }
 

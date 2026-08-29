@@ -25,6 +25,9 @@ const GA4_UPDATE_MASK: Record<Ga4Kind, string[]> = {
   eventCreateRule: ['eventConditions', 'sourceCopyParameters', 'parameterMutations'],
   /** `processingOrder` is output-only — GA4 rejects it in any `updateMask` (confirmed live 2026-08-29). */
   eventEditRule: ['displayName', 'eventConditions', 'parameterMutations'],
+  /** `calculatedMetricId` is immutable and create-only, not part of any update mask. */
+  calculatedMetric: ['displayName', 'metricUnit', 'formula', 'description'],
+  channelGroup: ['displayName', 'description', 'groupingRule', 'primary'],
 };
 
 export async function apply(opts: GlobalOptions): Promise<void> {
@@ -168,7 +171,7 @@ async function execute(result: PlanResult): Promise<void> {
   for (const change of ga4Changes.filter(isCreate)) {
     const kind = ga4KindOf(change.resource.type);
     const payload = toGa4Payload(kind, change.resource.id, change.resource.desiredState as Record<string, unknown>);
-    const created = await ga4.create(kind, payload, ga4Settings.streamName);
+    const created = await ga4.create(kind, payload, ga4Settings.streamName, change.resource.id);
     if (created.name) {
       const key = ga4.stateKeyFor(kind, change.resource.id);
       state = recordManaged(state, key, created.name);

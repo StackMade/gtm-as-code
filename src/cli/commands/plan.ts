@@ -18,7 +18,16 @@ import type { GlobalOptions } from '../options.js';
 import type { AnalyticsConfig } from '../../config/schema.js';
 
 const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
-const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent', 'audience', 'eventCreateRule', 'eventEditRule'];
+const GA4_KINDS: Ga4Kind[] = [
+  'dimension',
+  'metric',
+  'keyEvent',
+  'audience',
+  'eventCreateRule',
+  'eventEditRule',
+  'calculatedMetric',
+  'channelGroup',
+];
 /** Stream-scoped GA4 kinds need a resolved data stream `name` passed to `listManaged`. */
 const GA4_STREAM_SCOPED_KINDS: ReadonlySet<Ga4Kind> = new Set(['eventCreateRule', 'eventEditRule']);
 
@@ -33,6 +42,8 @@ const KIND_LABEL: Record<string, string> = {
   'ga4.audience': 'audience',
   'ga4.eventCreateRule': 'event create rule',
   'ga4.eventEditRule': 'event edit rule',
+  'ga4.calculatedMetric': 'calculated metric',
+  'ga4.channelGroup': 'channel group',
 };
 
 export interface PlanResult {

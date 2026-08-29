@@ -558,3 +558,84 @@ ga4:
 `;
   assert.throws(() => validate(emptyMutations), ConfigError);
 });
+
+test('ga4.calculatedMetrics accepts a metric and rejects an unknown metricUnit', () => {
+  const yaml = `
+ga4:
+  calculatedMetrics:
+    revenue_per_session:
+      displayName: Revenue per session
+      metricUnit: CURRENCY
+      formula: "(eventCount / 2.0)"
+      description: Custom calculated metric
+`;
+  const config = validate(yaml);
+  assert.equal(config.ga4.calculatedMetrics.revenue_per_session.metricUnit, 'CURRENCY');
+  assert.equal(config.ga4.calculatedMetrics.revenue_per_session.formula, '(eventCount / 2.0)');
+
+  const broken = `
+ga4:
+  calculatedMetrics:
+    broken:
+      displayName: Broken
+      metricUnit: NOT_A_UNIT
+      formula: "(eventCount / 2.0)"
+`;
+  assert.throws(() => validate(broken), ConfigError);
+});
+
+test('ga4.channelGroups accepts a bare single-condition filter and canonicalizes it to andGroup-of-orGroup', () => {
+  const yaml = `
+ga4:
+  channelGroups:
+    paid_social:
+      description: Paid social traffic
+      groupingRule:
+        - displayName: Paid Social
+          expression:
+            filter: { fieldName: eachScopeSource, string: { matchType: EXACT, value: facebook } }
+`;
+  const config = validate(yaml);
+  assert.deepEqual(config.ga4.channelGroups.paid_social.groupingRule[0].expression, {
+    and: [{ or: [{ filter: { fieldName: 'eachScopeSource', string: { matchType: 'EXACT', value: 'facebook' } } }] }],
+  });
+});
+
+test('ga4.channelGroups rejects more than 50 grouping rules', () => {
+  const rules = Array.from(
+    { length: 51 },
+    (_, i) => `        - displayName: Rule ${i}\n          expression: { filter: { fieldName: eachScopeSource, string: { matchType: EXACT, value: v } } }`,
+  ).join('\n');
+  const yaml = `
+ga4:
+  channelGroups:
+    broken:
+      groupingRule:
+${rules}
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.channelGroups rejects a filter expression with none or more than one of and/or/not/filter set', () => {
+  const empty = `
+ga4:
+  channelGroups:
+    broken:
+      groupingRule:
+        - displayName: Rule
+          expression: {}
+`;
+  assert.throws(() => validate(empty), ConfigError);
+
+  const both = `
+ga4:
+  channelGroups:
+    broken:
+      groupingRule:
+        - displayName: Rule
+          expression:
+            filter: { fieldName: eachScopeSource, string: { matchType: EXACT, value: v } }
+            not: { filter: { fieldName: eachScopeMedium, string: { matchType: EXACT, value: v } } }
+`;
+  assert.throws(() => validate(both), ConfigError);
+});

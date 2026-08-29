@@ -20,7 +20,7 @@ function client(routes: Record<string, unknown>): Ga4Client {
 }
 
 function baseGa4Config(): AnalyticsConfig['ga4'] {
-  return { dimensions: {}, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {} };
+  return { dimensions: {}, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {} };
 }
 
 test('diffGa4Settings is a no-op when config declares none of the settings', async () => {

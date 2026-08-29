@@ -147,3 +147,47 @@ test('audience maps a nested and-of-or filter with a not and a numeric filter, a
   });
   assert.deepEqual(fromGa4Payload('audience', ga4), desiredState);
 });
+
+// `calculatedMetricId` (= resourceId) is output-only in the body — GA4 takes it only as a
+// create-time query param (confirmed live 2026-08-29) — so it never appears in the mapped payload.
+test('calculatedMetric maps displayName/metricUnit/formula and back, without the id in the body', () => {
+  const desiredState = { displayName: 'Revenue per session', metricUnit: 'CURRENCY', formula: '(eventCount / 2.0)', description: 'desc' };
+  const ga4 = toGa4Payload('calculatedMetric', 'revenue_per_session', desiredState);
+  assert.deepEqual(ga4, { displayName: 'Revenue per session', metricUnit: 'CURRENCY', formula: '(eventCount / 2.0)', description: 'desc' });
+  assert.deepEqual(fromGa4Payload('calculatedMetric', ga4), desiredState);
+});
+
+// Same andGroup-of-orGroups nesting requirement as audiences (confirmed live 2026-08-29); config
+// validation (schema.ts's canonicalizeChannelGroupFilterExpression) normalizes a bare leaf into
+// this shape before the mapper sees it, so the mapper does a plain 1:1 translation.
+test('channelGroup maps a single leaf filter clause (already canonicalized) and back', () => {
+  const desiredState = {
+    description: 'Paid social traffic',
+    primary: false,
+    groupingRule: [
+      {
+        displayName: 'Paid Social',
+        expression: { and: [{ or: [{ filter: { fieldName: 'eachScopeSource', string: { matchType: 'EXACT', value: 'facebook' } } }] }] },
+      },
+    ],
+  };
+  const ga4 = toGa4Payload('channelGroup', 'paid_social', desiredState);
+  assert.deepEqual(ga4, {
+    displayName: 'paid_social',
+    description: 'Paid social traffic',
+    primary: false,
+    groupingRule: [
+      {
+        displayName: 'Paid Social',
+        expression: {
+          andGroup: {
+            filterExpressions: [
+              { orGroup: { filterExpressions: [{ filter: { fieldName: 'eachScopeSource', stringFilter: { matchType: 'EXACT', value: 'facebook' } } }] } },
+            ],
+          },
+        },
+      },
+    ],
+  });
+  assert.deepEqual(fromGa4Payload('channelGroup', ga4), desiredState);
+});

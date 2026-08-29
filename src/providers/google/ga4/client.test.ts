@@ -85,3 +85,28 @@ test('list on a stream-scoped kind throws when no stream name is given', async (
 
   await assert.rejects(() => client.list('eventCreateRule'), /stream-scoped/);
 });
+
+test('create on calculatedMetric sends calculatedMetricId as a query param, not a body field', async () => {
+  const requests: Array<{ url: string; params?: Record<string, unknown>; data?: unknown }> = [];
+  const auth = {
+    request: async (options: { url: string; params?: Record<string, unknown>; data?: unknown }) => {
+      requests.push(options);
+      return { data: { name: 'properties/1/calculatedMetrics/revenue_per_session', ...(options.data as object) } };
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new Ga4Client(auth as any, '1');
+
+  await client.create('calculatedMetric', { displayName: 'Revenue per session', metricUnit: 'CURRENCY', formula: '(1)' }, undefined, 'revenue_per_session');
+
+  assert.equal(requests[0].url, 'https://analyticsadmin.googleapis.com/v1alpha/properties/1/calculatedMetrics');
+  assert.deepEqual(requests[0].params, { calculatedMetricId: 'revenue_per_session' });
+  assert.deepEqual(requests[0].data, { displayName: 'Revenue per session', metricUnit: 'CURRENCY', formula: '(1)' });
+});
+
+test('create on calculatedMetric throws when no id override is given', async () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new Ga4Client(fakeAuth({}) as any, '1');
+
+  await assert.rejects(() => client.create('calculatedMetric', { displayName: 'x', metricUnit: 'STANDARD', formula: '(1)' }), /calculatedMetricId/);
+});

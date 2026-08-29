@@ -314,7 +314,25 @@ GA4 hardening is a hard prerequisite for all of it.
   edit rule's `processingOrder` is read-only, GA4 rejects it in any `updateMask`, so it's never part
   of config and reordering rules isn't supported. `pull` only fetches these two kinds when the
   property has exactly one web data stream to resolve to.
-- Calculated metrics and channel groups.
+- Calculated metrics and channel groups. **Done.** `ga4.calculatedMetrics`/`ga4.channelGroups`
+  model both as property-scoped create/update/delete `Resource`s (v1alpha, confirmed live
+  2026-08-29: both 404 on `v1beta`), unaffected by `streamWebsiteUrl`. A calculated metric's
+  config key is its `calculatedMetricId`, GA4's immutable identifier; unlike every other kind, GA4
+  requires it as a create-time query parameter, not a body field, since the body field itself is
+  output-only. This needed a new mechanism in `Ga4Client.create` (`createIdParam` on a `KINDS`
+  entry, plus an explicit id argument the caller supplies since it can't be read back out of an
+  output-only body field). Also confirmed live: `metricUnit` is mutable after creation, despite
+  nothing in GA4's docs saying so either way. A channel group's config key is its `displayName`,
+  like `ga4.audiences`; its `groupingRule[].expression` follows the same `and`-of-`or`s top-level
+  nesting GA4 requires of an audience filter, normalized the same way so a bare single condition is
+  enough. Its leaf `filter` has no `dimensionOrMetric`/`event` wrapper, just `fieldName` plus a
+  `string` or `inList` match, and neither supports `caseSensitive` (confirmed live GA4 rejects it
+  outright, unlike an audience's dimensionOrMetric filter). Valid `fieldName` values turned out to
+  use an undocumented `eachScope`-prefixed convention (`eachScopeSource`, `eachScopeMedium`,
+  `eachScopeCampaignId`, and similar), discovered only by reading GA4's own pre-existing "Default
+  channel group" and confirming variants by trial; this tool doesn't validate `fieldName` against
+  that set, a wrong value surfaces as GA4's own error on apply. Both kinds support a real `DELETE`,
+  no archive step.
 - Search Console link. Google Ads and BigQuery links are deliberately excluded, and not planned for
   any later milestone either.
 

@@ -162,6 +162,43 @@ export interface EventEditRuleDef {
   parameterMutations: ParameterMutationDef[];
 }
 
+/** Config key is `calculatedMetricId`, GA4's immutable identifier, passed at create time as a
+ *  query param, not a body field. `displayName` is a separate, mutable human label. */
+export interface CalculatedMetricDef {
+  displayName: string;
+  metricUnit: string;
+  formula: string;
+  description?: string;
+}
+
+export interface ChannelGroupFilterDef {
+  fieldName: string;
+  string?: { matchType: string; value: string };
+  inList?: { values: string[] };
+}
+
+/** Recursive, like `AudienceFilterExpressionDef`, but flatter: GA4's `ChannelGroupFilter` has no
+ *  dimensionOrMetric/event wrapper, just a plain `filter` leaf. */
+export interface ChannelGroupFilterExpressionDef {
+  and?: ChannelGroupFilterExpressionDef[];
+  or?: ChannelGroupFilterExpressionDef[];
+  not?: ChannelGroupFilterExpressionDef;
+  filter?: ChannelGroupFilterDef;
+}
+
+export interface GroupingRuleDef {
+  displayName: string;
+  expression: ChannelGroupFilterExpressionDef;
+}
+
+/** Config key is the group's `displayName`, like `AudienceDef`. */
+export interface ChannelGroupDef {
+  description?: string;
+  groupingRule: GroupingRuleDef[];
+  primary?: boolean;
+  protected?: boolean;
+}
+
 export interface AnalyticsConfig {
   version: 1;
   project: { name: string };
@@ -190,6 +227,8 @@ export interface AnalyticsConfig {
     /** Stream-scoped, like `enhancedMeasurement` — both require `streamWebsiteUrl`. */
     eventCreateRules: Record<string, EventCreateRuleDef>;
     eventEditRules: Record<string, EventEditRuleDef>;
+    calculatedMetrics: Record<string, CalculatedMetricDef>;
+    channelGroups: Record<string, ChannelGroupDef>;
   };
 }
 
@@ -213,6 +252,8 @@ const GA4_TOP_LEVEL_KEYS = [
   'audiences',
   'eventCreateRules',
   'eventEditRules',
+  'calculatedMetrics',
+  'channelGroups',
 ];
 /** `RETENTION_DURATION_UNSPECIFIED` is not a settable value, so it's excluded here. */
 const RETENTION_DURATIONS = ['TWO_MONTHS', 'FOURTEEN_MONTHS', 'TWENTY_SIX_MONTHS', 'THIRTY_EIGHT_MONTHS', 'FIFTY_MONTHS'] as const;
@@ -265,6 +306,20 @@ const COMPARISON_TYPES = [
 const PARAMETER_MUTATION_KEYS = ['parameter', 'parameterValue'];
 const EVENT_CREATE_RULE_KEYS = ['eventConditions', 'sourceCopyParameters', 'parameterMutations'];
 const EVENT_EDIT_RULE_KEYS = ['eventConditions', 'parameterMutations'];
+/** Confirmed live 2026-08-29: `metricUnit` is mutable via PATCH, not immutable as the docs' silence
+ *  on the point might suggest. Excludes `METRIC_UNIT_UNSPECIFIED`. */
+const METRIC_UNITS = ['STANDARD', 'CURRENCY', 'FEET', 'MILES', 'METERS', 'KILOMETERS', 'MILLISECONDS', 'SECONDS', 'MINUTES', 'HOURS'] as const;
+const CALCULATED_METRIC_KEYS = ['displayName', 'metricUnit', 'formula', 'description'];
+const CHANNEL_GROUP_KEYS = ['description', 'groupingRule', 'primary', 'protected'];
+const GROUPING_RULE_KEYS = ['displayName', 'expression'];
+const CHANNEL_GROUP_FILTER_EXPRESSION_KEYS = ['and', 'or', 'not', 'filter'] as const;
+const CHANNEL_GROUP_FILTER_KEYS = ['fieldName', 'string', 'inList'];
+const CHANNEL_GROUP_ONE_FILTER_KEYS = ['string', 'inList'] as const;
+const CHANNEL_GROUP_STRING_FILTER_KEYS = ['matchType', 'value'];
+const CHANNEL_GROUP_IN_LIST_KEYS = ['values'];
+/** Confirmed live 2026-08-29: unlike `AudienceDimensionOrMetricFilter`'s `stringFilter`, a channel
+ *  group's `stringFilter`/`inListFilter` has no `caseSensitive` field — GA4 rejects it outright. */
+const CHANNEL_GROUP_STRING_MATCH_TYPES = ['EXACT', 'BEGINS_WITH', 'ENDS_WITH', 'CONTAINS', 'FULL_REGEXP', 'PARTIAL_REGEXP'] as const;
 
 export function validateConfig(parsed: ParsedConfig): AnalyticsConfig {
   const root = requireObject(parsed, parsed.data, []);
@@ -555,7 +610,145 @@ function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4']
     audiences: validateAudiences(parsed, container.audiences ?? {}, ['ga4', 'audiences']),
     eventCreateRules,
     eventEditRules,
+    calculatedMetrics: validateCalculatedMetrics(parsed, container.calculatedMetrics ?? {}, ['ga4', 'calculatedMetrics']),
+    channelGroups: validateChannelGroups(parsed, container.channelGroups ?? {}, ['ga4', 'channelGroups']),
   };
+}
+
+function validateCalculatedMetrics(parsed: ParsedConfig, raw: unknown, path: string[]): Record<string, CalculatedMetricDef> {
+  const container = requireObject(parsed, raw, path);
+  const result: Record<string, CalculatedMetricDef> = {};
+  for (const [name, value] of Object.entries(container)) {
+    result[name] = validateCalculatedMetric(parsed, value, [...path, name]);
+  }
+  return result;
+}
+
+function validateCalculatedMetric(parsed: ParsedConfig, raw: unknown, path: string[]): CalculatedMetricDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, CALCULATED_METRIC_KEYS, path);
+  const displayName = requireString(parsed, def.displayName, [...path, 'displayName']);
+  const metricUnit = requireEnum(parsed, def.metricUnit, METRIC_UNITS, [...path, 'metricUnit']);
+  const formula = requireString(parsed, def.formula, [...path, 'formula']);
+  const description = def.description !== undefined ? requireString(parsed, def.description, [...path, 'description']) : undefined;
+  return { displayName, metricUnit, formula, ...(description !== undefined ? { description } : {}) };
+}
+
+function validateChannelGroups(parsed: ParsedConfig, raw: unknown, path: string[]): Record<string, ChannelGroupDef> {
+  const container = requireObject(parsed, raw, path);
+  const result: Record<string, ChannelGroupDef> = {};
+  for (const [name, value] of Object.entries(container)) {
+    result[name] = validateChannelGroup(parsed, value, [...path, name]);
+  }
+  return result;
+}
+
+function validateChannelGroup(parsed: ParsedConfig, raw: unknown, path: string[]): ChannelGroupDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, CHANNEL_GROUP_KEYS, path);
+  const description = def.description !== undefined ? requireString(parsed, def.description, [...path, 'description']) : undefined;
+  const primary = def.primary !== undefined ? requireBoolean(parsed, def.primary, [...path, 'primary']) : undefined;
+  const isProtected = def.protected !== undefined ? requireBoolean(parsed, def.protected, [...path, 'protected']) : undefined;
+
+  const rulesPath = [...path, 'groupingRule'];
+  if (!Array.isArray(def.groupingRule) || def.groupingRule.length === 0 || def.groupingRule.length > 50) {
+    fail(parsed, rulesPath, [
+      { label: 'Expected', value: 'array of 1-50 grouping rules' },
+      { label: 'Received', value: Array.isArray(def.groupingRule) ? `array of ${def.groupingRule.length}` : describeType(def.groupingRule) },
+    ]);
+  }
+  const groupingRule = def.groupingRule.map((rule, index) => validateGroupingRule(parsed, rule, [...rulesPath, String(index)]));
+
+  return {
+    groupingRule,
+    ...(description !== undefined ? { description } : {}),
+    ...(primary !== undefined ? { primary } : {}),
+    ...(isProtected !== undefined ? { protected: isProtected } : {}),
+  };
+}
+
+function validateGroupingRule(parsed: ParsedConfig, raw: unknown, path: string[]): GroupingRuleDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, GROUPING_RULE_KEYS, path);
+  return {
+    displayName: requireString(parsed, def.displayName, [...path, 'displayName']),
+    expression: canonicalizeChannelGroupFilterExpression(
+      validateChannelGroupFilterExpression(parsed, def.expression, [...path, 'expression']),
+    ),
+  };
+}
+
+/** GA4 requires a grouping rule's top-level expression to be an `andGroup` of `orGroup`s, the same
+ *  shape audiences require (confirmed live 2026-08-29) — normalized here for the same reason
+ *  `canonicalizeAudienceFilterExpression` exists: `diff()` compares the config value directly. */
+function canonicalizeChannelGroupFilterExpression(expr: ChannelGroupFilterExpressionDef): ChannelGroupFilterExpressionDef {
+  if (expr.and) {
+    return { and: expr.and.map((child) => (child.or !== undefined ? child : { or: [child] })) };
+  }
+  if (expr.or) {
+    return { and: [expr] };
+  }
+  return { and: [{ or: [expr] }] };
+}
+
+function validateChannelGroupFilterExpression(parsed: ParsedConfig, raw: unknown, path: string[]): ChannelGroupFilterExpressionDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, CHANNEL_GROUP_FILTER_EXPRESSION_KEYS, path);
+
+  const present = CHANNEL_GROUP_FILTER_EXPRESSION_KEYS.filter((key) => def[key] !== undefined);
+  if (present.length !== 1) {
+    fail(parsed, path, [
+      { label: 'Expected', value: `exactly one of ${CHANNEL_GROUP_FILTER_EXPRESSION_KEYS.join(', ')}` },
+      { label: 'Received', value: present.length === 0 ? 'none' : present.join(', ') },
+    ]);
+  }
+
+  const result: ChannelGroupFilterExpressionDef = {};
+  if (def.and !== undefined) {
+    if (!Array.isArray(def.and)) fail(parsed, [...path, 'and'], [{ label: 'Expected', value: 'array' }, { label: 'Received', value: describeType(def.and) }]);
+    result.and = def.and.map((item, i) => validateChannelGroupFilterExpression(parsed, item, [...path, 'and', String(i)]));
+  }
+  if (def.or !== undefined) {
+    if (!Array.isArray(def.or)) fail(parsed, [...path, 'or'], [{ label: 'Expected', value: 'array' }, { label: 'Received', value: describeType(def.or) }]);
+    result.or = def.or.map((item, i) => validateChannelGroupFilterExpression(parsed, item, [...path, 'or', String(i)]));
+  }
+  if (def.not !== undefined) {
+    result.not = validateChannelGroupFilterExpression(parsed, def.not, [...path, 'not']);
+  }
+  if (def.filter !== undefined) {
+    result.filter = validateChannelGroupFilter(parsed, def.filter, [...path, 'filter']);
+  }
+  return result;
+}
+
+function validateChannelGroupFilter(parsed: ParsedConfig, raw: unknown, path: string[]): ChannelGroupFilterDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, CHANNEL_GROUP_FILTER_KEYS, path);
+  const fieldName = requireString(parsed, def.fieldName, [...path, 'fieldName']);
+
+  const present = CHANNEL_GROUP_ONE_FILTER_KEYS.filter((key) => def[key] !== undefined);
+  if (present.length !== 1) {
+    fail(parsed, path, [
+      { label: 'Expected', value: `exactly one of ${CHANNEL_GROUP_ONE_FILTER_KEYS.join(', ')}` },
+      { label: 'Received', value: present.length === 0 ? 'none' : present.join(', ') },
+    ]);
+  }
+
+  const result: ChannelGroupFilterDef = { fieldName };
+  if (def.string !== undefined) {
+    const s = requireObject(parsed, def.string, [...path, 'string']);
+    checkUnknownKeys(parsed, s, CHANNEL_GROUP_STRING_FILTER_KEYS, [...path, 'string']);
+    result.string = {
+      matchType: requireEnum(parsed, s.matchType, CHANNEL_GROUP_STRING_MATCH_TYPES, [...path, 'string', 'matchType']),
+      value: requireString(parsed, s.value, [...path, 'string', 'value']),
+    };
+  }
+  if (def.inList !== undefined) {
+    const l = requireObject(parsed, def.inList, [...path, 'inList']);
+    checkUnknownKeys(parsed, l, CHANNEL_GROUP_IN_LIST_KEYS, [...path, 'inList']);
+    result.inList = { values: requireStringArray(parsed, l.values, [...path, 'inList', 'values']) };
+  }
+  return result;
 }
 
 function validateEventCreateRules(parsed: ParsedConfig, raw: unknown, path: string[]): Record<string, EventCreateRuleDef> {

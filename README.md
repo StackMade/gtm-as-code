@@ -302,6 +302,25 @@ ga4:
       parameterMutations:  # required, 1-20
         - { parameter: string, parameterValue: string }
     # requires streamWebsiteUrl to be set
+  calculatedMetrics:
+    <name>:  # <name> is the metric's calculatedMetricId (immutable once created)
+      displayName: string
+      metricUnit: STANDARD | CURRENCY | FEET | MILES | METERS | KILOMETERS | MILLISECONDS | SECONDS | MINUTES | HOURS
+      formula: string  # e.g. "(eventCount / 2.0)"
+      description: string  # optional
+  channelGroups:
+    <name>:  # <name> is the group's displayName
+      description: string  # optional
+      primary: boolean  # optional, only one channel group can be primary
+      groupingRule:  # 1-50
+        - displayName: string
+          expression:
+            # exactly one of the following, and/or/not may nest recursively:
+            and: [<filter>, ...]
+            or: [<filter>, ...]
+            not: <filter>
+            filter: { fieldName: string, string: { matchType: string, value: string } |
+              inList: { values: [string] } }
 ```
 
 Only `type` (and, for tags, `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`) is
@@ -357,6 +376,26 @@ other edit rules on the same stream) that's read-only through this API (confirme
 rejects it in any `updateMask`), so it's never part of config and never round-tripped back from a
 `pull`; reordering rules isn't supported. `pull` only fetches these two kinds when the property has
 exactly one web data stream to resolve to; with more than one, it skips them and prints why.
+
+`ga4.calculatedMetrics` and `ga4.channelGroups` are property-scoped create/update/delete
+`Resource`s (v1alpha, confirmed live 2026-08-29: both 404 on `v1beta`), unaffected by
+`streamWebsiteUrl`. A calculated metric's config key is its `calculatedMetricId`, GA4's immutable
+identifier (externally referenced as `calcMetric:{id}`); unlike every other kind's identity field,
+GA4 requires it as a create-time query parameter rather than a body field, since the body field
+itself is output-only. `metricUnit` is mutable after creation (confirmed live, despite there being
+no field-level note in GA4's own docs saying so); `formula`, `description`, and `displayName`
+(a separate, mutable label, distinct from the config key) are too. A channel group's config key is
+its `displayName`, like `ga4.audiences`. `groupingRule[].expression` follows the same
+`and`-of-`or`s top-level nesting GA4 requires of an audience filter, so a single bare `filter`
+condition is enough and gets normalized automatically. Its leaf `filter` has no `dimensionOrMetric`/
+`event` wrapper, just `fieldName` plus a `string` or `inList` match, and neither supports
+`caseSensitive` (confirmed live GA4 rejects the field outright, unlike an audience's dimensionOrMetric
+filter). Valid `fieldName` values use an undocumented `eachScope`-prefixed convention (e.g.
+`eachScopeSource`, `eachScopeMedium`, `eachScopeCampaignId`) discovered by reading GA4's own
+pre-existing "Default channel group"; this tool doesn't validate `fieldName` against that set; a
+wrong value surfaces as GA4's own error on apply. Both kinds support a real `DELETE`, no archive
+step; deleting the property's system-defined "Default channel group" isn't possible through the API
+regardless.
 
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),

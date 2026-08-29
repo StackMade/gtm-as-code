@@ -5,8 +5,13 @@ import type {
   AudienceEventFilterDef,
   AudienceFilterClauseDef,
   AudienceFilterExpressionDef,
+  CalculatedMetricDef,
+  ChannelGroupDef,
+  ChannelGroupFilterDef,
+  ChannelGroupFilterExpressionDef,
   EventCreateRuleDef,
   EventEditRuleDef,
+  GroupingRuleDef,
   MatchingConditionDef,
   ParameterMutationDef,
 } from '../../../config/schema.js';
@@ -40,6 +45,14 @@ export function toGa4Payload(kind: Ga4Kind, resourceId: string, desiredState: Re
     return toEventEditRulePayload(resourceId, desiredState as unknown as EventEditRuleDef);
   }
 
+  if (kind === 'calculatedMetric') {
+    return toCalculatedMetricPayload(resourceId, desiredState as unknown as CalculatedMetricDef);
+  }
+
+  if (kind === 'channelGroup') {
+    return toChannelGroupPayload(resourceId, desiredState as unknown as ChannelGroupDef);
+  }
+
   return {
     eventName: resourceId,
     countingMethod: String(desiredState.countingMethod ?? 'ONCE_PER_EVENT'),
@@ -65,6 +78,14 @@ export function fromGa4Payload(kind: Ga4Kind, object: Ga4Object): Record<string,
 
   if (kind === 'eventEditRule') {
     return fromEventEditRulePayload(object) as unknown as Record<string, unknown>;
+  }
+
+  if (kind === 'calculatedMetric') {
+    return fromCalculatedMetricPayload(object) as unknown as Record<string, unknown>;
+  }
+
+  if (kind === 'channelGroup') {
+    return fromChannelGroupPayload(object) as unknown as Record<string, unknown>;
   }
 
   return {};
@@ -135,6 +156,105 @@ function fromMatchingCondition(raw: unknown): MatchingConditionDef {
 function fromParameterMutation(raw: unknown): ParameterMutationDef {
   const mutation = raw as Record<string, unknown>;
   return { parameter: String(mutation.parameter), parameterValue: String(mutation.parameterValue) };
+}
+
+/** `calculatedMetricId` (= `resourceId`) is output-only in the body — GA4 takes it only as a
+ *  create-time query param (confirmed live 2026-08-29), so it's never written here. */
+function toCalculatedMetricPayload(_resourceId: string, def: CalculatedMetricDef): Ga4Object {
+  return {
+    displayName: def.displayName,
+    metricUnit: def.metricUnit,
+    formula: def.formula,
+    ...(def.description !== undefined ? { description: def.description } : {}),
+  };
+}
+
+function fromCalculatedMetricPayload(object: Ga4Object): CalculatedMetricDef {
+  return {
+    displayName: String(object.displayName),
+    metricUnit: String(object.metricUnit),
+    formula: String(object.formula),
+    ...(object.description !== undefined ? { description: String(object.description) } : {}),
+  };
+}
+
+function toChannelGroupPayload(resourceId: string, def: ChannelGroupDef): Ga4Object {
+  return {
+    displayName: resourceId,
+    groupingRule: def.groupingRule.map(toGroupingRule),
+    ...(def.description !== undefined ? { description: def.description } : {}),
+    ...(def.primary !== undefined ? { primary: def.primary } : {}),
+  };
+}
+
+function toGroupingRule(rule: GroupingRuleDef): Record<string, unknown> {
+  return { displayName: rule.displayName, expression: toChannelGroupFilterExpression(rule.expression) };
+}
+
+/** Same `andGroup`-of-`orGroup`s nesting requirement as `AudienceFilterExpression`, confirmed live
+ *  2026-08-29; `canonicalizeChannelGroupFilterExpression` (schema.ts) already normalizes config to
+ *  that shape, so no re-validation is needed here. */
+function toChannelGroupFilterExpression(expr: ChannelGroupFilterExpressionDef): Record<string, unknown> {
+  if (expr.and) return { andGroup: { filterExpressions: expr.and.map(toChannelGroupFilterExpression) } };
+  if (expr.or) return { orGroup: { filterExpressions: expr.or.map(toChannelGroupFilterExpression) } };
+  if (expr.not) return { notExpression: toChannelGroupFilterExpression(expr.not) };
+  if (expr.filter) return { filter: toChannelGroupFilter(expr.filter) };
+  throw new Error('Channel group filter expression has none of and/or/not/filter set.');
+}
+
+/** Neither `stringFilter` nor `inListFilter` supports `caseSensitive` here, unlike an audience's
+ *  dimensionOrMetric filter (confirmed live 2026-08-29: GA4 rejects the field outright). */
+function toChannelGroupFilter(def: ChannelGroupFilterDef): Record<string, unknown> {
+  const result: Record<string, unknown> = { fieldName: def.fieldName };
+  if (def.string) result.stringFilter = def.string;
+  if (def.inList) result.inListFilter = def.inList;
+  return result;
+}
+
+function fromChannelGroupPayload(object: Ga4Object): ChannelGroupDef {
+  return {
+    groupingRule: ((object.groupingRule as unknown[]) ?? []).map(fromGroupingRule),
+    ...(object.description !== undefined ? { description: String(object.description) } : {}),
+    ...(object.primary !== undefined ? { primary: Boolean(object.primary) } : {}),
+  };
+}
+
+function fromGroupingRule(raw: unknown): GroupingRuleDef {
+  const rule = raw as Record<string, unknown>;
+  return { displayName: String(rule.displayName), expression: fromChannelGroupFilterExpression(rule.expression) };
+}
+
+function fromChannelGroupFilterExpression(raw: unknown): ChannelGroupFilterExpressionDef {
+  const expr = raw as Record<string, unknown>;
+  if (expr.andGroup) {
+    const group = expr.andGroup as Record<string, unknown>;
+    return { and: (group.filterExpressions as unknown[]).map(fromChannelGroupFilterExpression) };
+  }
+  if (expr.orGroup) {
+    const group = expr.orGroup as Record<string, unknown>;
+    return { or: (group.filterExpressions as unknown[]).map(fromChannelGroupFilterExpression) };
+  }
+  if (expr.notExpression) {
+    return { not: fromChannelGroupFilterExpression(expr.notExpression) };
+  }
+  if (expr.filter) {
+    return { filter: fromChannelGroupFilter(expr.filter) };
+  }
+  throw new Error('GA4 returned a channel group filter expression this tool cannot parse.');
+}
+
+function fromChannelGroupFilter(raw: unknown): ChannelGroupFilterDef {
+  const filter = raw as Record<string, unknown>;
+  const result: ChannelGroupFilterDef = { fieldName: String(filter.fieldName) };
+  if (filter.stringFilter) {
+    const s = filter.stringFilter as Record<string, unknown>;
+    result.string = { matchType: String(s.matchType), value: String(s.value) };
+  }
+  if (filter.inListFilter) {
+    const l = filter.inListFilter as Record<string, unknown>;
+    result.inList = { values: (l.values as string[]) ?? [] };
+  }
+  return result;
 }
 
 function toAudiencePayload(resourceId: string, def: AudienceDef): Ga4Object {

@@ -52,6 +52,21 @@ const KINDS = {
    */
   eventCreateRule: { collection: 'eventCreateRules', field: 'eventCreateRules', type: 'ga4.eventCreateRule', archivable: false, v1alpha: true, scope: 'stream' },
   eventEditRule: { collection: 'eventEditRules', field: 'eventEditRules', type: 'ga4.eventEditRule', archivable: false, v1alpha: true, scope: 'stream' },
+  /**
+   * `calculatedMetricId` is immutable once created and, unlike every other kind's identity field,
+   * is not just a body field: GA4 requires it as a create-time query param (confirmed live
+   * 2026-08-29). `createIdParam` tells `create()` to also send it that way.
+   */
+  calculatedMetric: {
+    collection: 'calculatedMetrics',
+    field: 'calculatedMetrics',
+    type: 'ga4.calculatedMetric',
+    archivable: false,
+    v1alpha: true,
+    scope: 'property',
+    createIdParam: 'calculatedMetricId',
+  },
+  channelGroup: { collection: 'channelGroups', field: 'channelGroups', type: 'ga4.channelGroup', archivable: false, v1alpha: true, scope: 'property' },
 } as const;
 
 export type Ga4Kind = keyof typeof KINDS;
@@ -80,6 +95,8 @@ const RESOURCE_ID_FIELD: Record<Ga4Kind, string> = {
   audience: 'displayName',
   eventCreateRule: 'destinationEvent',
   eventEditRule: 'displayName',
+  calculatedMetric: 'calculatedMetricId',
+  channelGroup: 'displayName',
 };
 
 function resourceId(kind: Ga4Kind, object: Ga4Object): string {
@@ -160,10 +177,24 @@ export class Ga4Client {
     return stateKey('google', KINDS[kind].type, this.propertyId, resourceId);
   }
 
-  async create(kind: Ga4Kind, payload: Ga4Object, streamName?: string): Promise<Ga4Object> {
-    const id = resourceId(kind, payload);
+  /**
+   * `resourceIdOverride` is required when the kind's `createIdParam` is set: that id is GA4's
+   * immutable, create-time-only identifier, output-only in the body (`calculatedMetricId`), so it
+   * cannot be read back out of `payload` the way every other kind's identity field can.
+   */
+  async create(kind: Ga4Kind, payload: Ga4Object, streamName?: string, resourceIdOverride?: string): Promise<Ga4Object> {
+    const createIdParam = (KINDS[kind] as { createIdParam?: string }).createIdParam;
+    const id = resourceIdOverride ?? resourceId(kind, payload);
+    if (createIdParam && !resourceIdOverride) {
+      throw new Error(`ga4.${kind} requires an explicit id for its ${createIdParam} query param.`);
+    }
     try {
-      const response = await this.auth.request<Ga4Object>({ url: this.collectionUrl(kind, streamName), method: 'POST', data: payload });
+      const response = await this.auth.request<Ga4Object>({
+        url: this.collectionUrl(kind, streamName),
+        method: 'POST',
+        ...(createIdParam ? { params: { [createIdParam]: id } } : {}),
+        data: payload,
+      });
       return response.data;
     } catch (error) {
       throw new Ga4ApiError(`create ${kind}`, id, extractApiStatus(error), { cause: error });

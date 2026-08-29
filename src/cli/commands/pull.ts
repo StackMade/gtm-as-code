@@ -32,10 +32,12 @@ export type PullKind =
   | 'keyEvent'
   | 'audience'
   | 'eventCreateRule'
-  | 'eventEditRule';
+  | 'eventEditRule'
+  | 'calculatedMetric'
+  | 'channelGroup';
 
 const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
-const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent', 'audience'];
+const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent', 'audience', 'calculatedMetric', 'channelGroup'];
 
 /** Where a pulled resource of each kind lands in `AnalyticsConfig`. */
 const BUCKET: Record<PullKind, [top: 'gtm' | 'ga4', field: string]> = {
@@ -49,6 +51,8 @@ const BUCKET: Record<PullKind, [top: 'gtm' | 'ga4', field: string]> = {
   audience: ['ga4', 'audiences'],
   eventCreateRule: ['ga4', 'eventCreateRules'],
   eventEditRule: ['ga4', 'eventEditRules'],
+  calculatedMetric: ['ga4', 'calculatedMetrics'],
+  channelGroup: ['ga4', 'channelGroups'],
 };
 
 const KIND_LABEL: Record<PullKind, string> = {
@@ -62,6 +66,8 @@ const KIND_LABEL: Record<PullKind, string> = {
   audience: 'audiences',
   eventCreateRule: 'event create rules',
   eventEditRule: 'event edit rules',
+  calculatedMetric: 'calculated metrics',
+  channelGroup: 'channel groups',
 };
 
 export async function pull(opts: PullOptions): Promise<void> {
@@ -112,6 +118,8 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
     audiences: {},
     eventCreateRules: {},
     eventEditRules: {},
+    calculatedMetrics: {},
+    channelGroups: {},
   }) as Record<string, unknown>;
   const nextConfig = {
     ...raw,
@@ -133,6 +141,8 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
     audiences: 0,
     eventCreateRules: 0,
     eventEditRules: 0,
+    calculatedMetrics: 0,
+    channelGroups: 0,
     skipped: resources.skipped,
   };
   console.log(buildFoundSummary(counts).join('\n'));
@@ -169,6 +179,8 @@ async function pullAll(opts: PullOptions): Promise<void> {
       audiences: ga4Resources.audience,
       eventCreateRules: ga4Resources.eventCreateRule,
       eventEditRules: ga4Resources.eventEditRule,
+      calculatedMetrics: ga4Resources.calculatedMetric,
+      channelGroups: ga4Resources.channelGroup,
       ...(config.ga4.streamWebsiteUrl ? { streamWebsiteUrl: config.ga4.streamWebsiteUrl } : {}),
     },
   };
@@ -243,6 +255,8 @@ interface PulledGa4 {
   audience: Record<string, Record<string, unknown>>;
   eventCreateRule: Record<string, Record<string, unknown>>;
   eventEditRule: Record<string, Record<string, unknown>>;
+  calculatedMetric: Record<string, Record<string, unknown>>;
+  channelGroup: Record<string, Record<string, unknown>>;
 }
 
 export interface FoundCounts {
@@ -256,6 +270,8 @@ export interface FoundCounts {
   audiences: number;
   eventCreateRules: number;
   eventEditRules: number;
+  calculatedMetrics: number;
+  channelGroups: number;
   /** GTM objects with no reverse mapping (e.g. built-in types this tool doesn't manage) — found but not written. */
   skipped: number;
 }
@@ -293,7 +309,9 @@ async function pullAllResources(
     tag: tagMap.resources,
   };
 
-  const [dimensions, metrics, keyEvents, audiences] = await Promise.all(GA4_KINDS.map((kind) => ga4.listResources(kind)));
+  const [dimensions, metrics, keyEvents, audiences, calculatedMetrics, channelGroups] = await Promise.all(
+    GA4_KINDS.map((kind) => ga4.listResources(kind)),
+  );
 
   // Event create/edit rules are stream-scoped; pull has no config-declared stream to work from,
   // so it only pulls them when the property has exactly one web data stream to resolve to.
@@ -318,6 +336,8 @@ async function pullAllResources(
     audience: toGa4Map('audience', audiences),
     eventCreateRule: toGa4Map('eventCreateRule', eventCreateRules),
     eventEditRule: toGa4Map('eventEditRule', eventEditRules),
+    calculatedMetric: toGa4Map('calculatedMetric', calculatedMetrics),
+    channelGroup: toGa4Map('channelGroup', channelGroups),
   };
 
   // "Found" counts the raw remote objects GTM returned, not just the ones this tool knows
@@ -333,6 +353,8 @@ async function pullAllResources(
     audiences: Object.keys(ga4Resources.audience).length,
     eventCreateRules: Object.keys(ga4Resources.eventCreateRule).length,
     eventEditRules: Object.keys(ga4Resources.eventEditRule).length,
+    calculatedMetrics: Object.keys(ga4Resources.calculatedMetric).length,
+    channelGroups: Object.keys(ga4Resources.channelGroup).length,
     skipped: folderMap.skipped + variableMap.skipped + triggerMap.skipped + tagMap.skipped,
   };
 
@@ -427,6 +449,8 @@ export function buildFoundSummary(counts: FoundCounts): string[] {
     `  ${counts.audiences} audiences`,
     `  ${counts.eventCreateRules} event create rules`,
     `  ${counts.eventEditRules} event edit rules`,
+    `  ${counts.calculatedMetrics} calculated metrics`,
+    `  ${counts.channelGroups} channel groups`,
   ];
   if (counts.skipped > 0) {
     lines.push('', `  ${counts.skipped} skipped (no reverse mapping for this GTM object type)`);

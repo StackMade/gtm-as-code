@@ -18,6 +18,8 @@ const KIND_LABEL: Record<string, string> = {
   'ga4.audience': 'audience',
   'ga4.eventCreateRule': 'event create rule',
   'ga4.eventEditRule': 'event edit rule',
+  'ga4.calculatedMetric': 'calculated metric',
+  'ga4.channelGroup': 'channel group',
 };
 
 export interface DiffResult {
