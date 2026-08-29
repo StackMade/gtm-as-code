@@ -333,7 +333,11 @@ GA4 hardening is a hard prerequisite for all of it.
   channel group" and confirming variants by trial; this tool doesn't validate `fieldName` against
   that set, a wrong value surfaces as GA4's own error on apply. Both kinds support a real `DELETE`,
   no archive step.
-- Search Console link. Google Ads and BigQuery links are deliberately excluded, and not planned for
+- Search Console link. **Blocked, not this tool's gap.** The GA4 Admin API's discovery document
+  (both `v1alpha` and `v1beta`, confirmed live 2026-08-29) has no `searchConsoleLinks` resource at
+  all, unlike `bigQueryLinks`/`firebaseLinks`/`googleAdsLinks`/`adSenseLinks`/`searchAds360Links`/
+  `displayVideo360*`, which do exist. Search Console linking is GA4-UI-only; there is nothing for
+  this tool to call. Revisit if Google ever adds the endpoint. Google Ads and BigQuery links are deliberately excluded, and not planned for
   any later milestone either.
 
 ## 0.8: verify against reality
