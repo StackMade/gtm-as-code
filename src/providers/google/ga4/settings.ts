@@ -1,5 +1,5 @@
 import type { AnalyticsConfig } from '../../../config/schema.js';
-import { Ga4Client } from './client.js';
+import { Ga4Client, type DataStream } from './client.js';
 
 export interface Ga4SettingsDiff {
   /** The resolved data stream's full resource path, set whenever `ga4.streamWebsiteUrl` is declared. */
@@ -9,12 +9,29 @@ export interface Ga4SettingsDiff {
   enhancedMeasurement?: { patch: Record<string, boolean>; updateMask: string[] };
 }
 
+/** Looks up `streamWebsiteUrl`'s data stream, naming the URLs that do exist if it's not found. */
+export async function resolveGa4Stream(ga4: Ga4Client, streamWebsiteUrl: string): Promise<DataStream> {
+  const stream = await ga4.findWebStreamByUrl(streamWebsiteUrl);
+  if (!stream) {
+    const streams = await ga4.listDataStreams();
+    const known = streams.map((s) => s.webStreamData?.defaultUri).filter(Boolean);
+    const knownList = known.length > 0 ? ` Web streams on this property: ${known.join(', ')}.` : ' This property has no web data streams.';
+    throw new Error(`No GA4 web data stream found for URL "${streamWebsiteUrl}".${knownList}`);
+  }
+  return stream;
+}
+
 /**
  * Property/stream settings have no create-delete lifecycle, unlike dimensions/metrics/keyEvents,
  * so they're diffed here against live state rather than flowing through `core/diff.ts`'s
- * `Resource`/`Change` model.
+ * `Resource`/`Change` model. `resolvedStream`, when passed, skips this function's own lookup —
+ * callers that also need the stream for something else (event create/edit rules) resolve it once.
  */
-export async function diffGa4Settings(ga4: Ga4Client, config: AnalyticsConfig['ga4']): Promise<Ga4SettingsDiff> {
+export async function diffGa4Settings(
+  ga4: Ga4Client,
+  config: AnalyticsConfig['ga4'],
+  resolvedStream?: DataStream,
+): Promise<Ga4SettingsDiff> {
   const result: Ga4SettingsDiff = {};
 
   if (config.dataRetention) {
@@ -32,13 +49,7 @@ export async function diffGa4Settings(ga4: Ga4Client, config: AnalyticsConfig['g
   }
 
   if (config.streamWebsiteUrl) {
-    const stream = await ga4.findWebStreamByUrl(config.streamWebsiteUrl);
-    if (!stream) {
-      const streams = await ga4.listDataStreams();
-      const known = streams.map((s) => s.webStreamData?.defaultUri).filter(Boolean);
-      const knownList = known.length > 0 ? ` Web streams on this property: ${known.join(', ')}.` : ' This property has no web data streams.';
-      throw new Error(`No GA4 web data stream found for URL "${config.streamWebsiteUrl}".${knownList}`);
-    }
+    const stream = resolvedStream ?? (await resolveGa4Stream(ga4, config.streamWebsiteUrl));
     result.streamName = stream.name;
 
     if (config.enhancedMeasurement) {

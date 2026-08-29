@@ -137,6 +137,31 @@ export interface AudienceDef {
   protected?: boolean;
 }
 
+export interface MatchingConditionDef {
+  field: string;
+  comparisonType: string;
+  value: string;
+  negated?: boolean;
+}
+
+export interface ParameterMutationDef {
+  parameter: string;
+  parameterValue: string;
+}
+
+/** Config key is the rule's `destinationEvent` — GA4's `EventCreateRule` has no separate label field. */
+export interface EventCreateRuleDef {
+  eventConditions: MatchingConditionDef[];
+  sourceCopyParameters?: boolean;
+  parameterMutations?: ParameterMutationDef[];
+}
+
+/** Config key is the rule's `displayName`, like `AudienceDef`. */
+export interface EventEditRuleDef {
+  eventConditions: MatchingConditionDef[];
+  parameterMutations: ParameterMutationDef[];
+}
+
 export interface AnalyticsConfig {
   version: 1;
   project: { name: string };
@@ -162,6 +187,9 @@ export interface AnalyticsConfig {
     googleSignals?: string;
     enhancedMeasurement?: EnhancedMeasurementDef;
     audiences: Record<string, AudienceDef>;
+    /** Stream-scoped, like `enhancedMeasurement` — both require `streamWebsiteUrl`. */
+    eventCreateRules: Record<string, EventCreateRuleDef>;
+    eventEditRules: Record<string, EventEditRuleDef>;
   };
 }
 
@@ -183,6 +211,8 @@ const GA4_TOP_LEVEL_KEYS = [
   'googleSignals',
   'enhancedMeasurement',
   'audiences',
+  'eventCreateRules',
+  'eventEditRules',
 ];
 /** `RETENTION_DURATION_UNSPECIFIED` is not a settable value, so it's excluded here. */
 const RETENTION_DURATIONS = ['TWO_MONTHS', 'FOURTEEN_MONTHS', 'TWENTY_SIX_MONTHS', 'THIRTY_EIGHT_MONTHS', 'FIFTY_MONTHS'] as const;
@@ -213,6 +243,28 @@ const AUDIENCE_ONE_FILTER_KEYS = ['string', 'inList', 'numeric', 'between'] as c
 const AUDIENCE_STRING_MATCH_TYPES = ['EXACT', 'BEGINS_WITH', 'ENDS_WITH', 'CONTAINS', 'FULL_REGEXP'] as const;
 const AUDIENCE_NUMERIC_OPERATIONS = ['EQUAL', 'LESS_THAN', 'GREATER_THAN'] as const;
 const AUDIENCE_EVENT_FILTER_KEYS = ['eventName', 'parameterFilter'];
+const MATCHING_CONDITION_KEYS = ['field', 'comparisonType', 'value', 'negated'];
+/** `COMPARISON_TYPE_UNSPECIFIED` is not a settable value; `REGULAR_EXPRESSION*` are web-stream only,
+ *  not enforced here since a mismatch surfaces as GA4's own error on apply. */
+const COMPARISON_TYPES = [
+  'EQUALS',
+  'EQUALS_CASE_INSENSITIVE',
+  'CONTAINS',
+  'CONTAINS_CASE_INSENSITIVE',
+  'STARTS_WITH',
+  'STARTS_WITH_CASE_INSENSITIVE',
+  'ENDS_WITH',
+  'ENDS_WITH_CASE_INSENSITIVE',
+  'GREATER_THAN',
+  'GREATER_THAN_OR_EQUAL',
+  'LESS_THAN',
+  'LESS_THAN_OR_EQUAL',
+  'REGULAR_EXPRESSION',
+  'REGULAR_EXPRESSION_CASE_INSENSITIVE',
+] as const;
+const PARAMETER_MUTATION_KEYS = ['parameter', 'parameterValue'];
+const EVENT_CREATE_RULE_KEYS = ['eventConditions', 'sourceCopyParameters', 'parameterMutations'];
+const EVENT_EDIT_RULE_KEYS = ['eventConditions', 'parameterMutations'];
 
 export function validateConfig(parsed: ParsedConfig): AnalyticsConfig {
   const root = requireObject(parsed, parsed.data, []);
@@ -483,6 +535,15 @@ function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4']
     ]);
   }
 
+  const eventCreateRules = validateEventCreateRules(parsed, container.eventCreateRules ?? {}, ['ga4', 'eventCreateRules']);
+  const eventEditRules = validateEventEditRules(parsed, container.eventEditRules ?? {}, ['ga4', 'eventEditRules']);
+  if ((Object.keys(eventCreateRules).length > 0 || Object.keys(eventEditRules).length > 0) && streamWebsiteUrl === undefined) {
+    fail(parsed, ['ga4', 'streamWebsiteUrl'], [
+      { label: 'Expected', value: '`ga4.streamWebsiteUrl` set (event create/edit rules are stream-scoped)' },
+      { label: 'Received', value: 'no `ga4.streamWebsiteUrl`' },
+    ]);
+  }
+
   return {
     dimensions: validateDimensions(parsed, container.dimensions ?? {}, ['ga4', 'dimensions']),
     metrics: validateMetrics(parsed, container.metrics ?? {}, ['ga4', 'metrics']),
@@ -492,6 +553,97 @@ function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4']
     googleSignals,
     enhancedMeasurement,
     audiences: validateAudiences(parsed, container.audiences ?? {}, ['ga4', 'audiences']),
+    eventCreateRules,
+    eventEditRules,
+  };
+}
+
+function validateEventCreateRules(parsed: ParsedConfig, raw: unknown, path: string[]): Record<string, EventCreateRuleDef> {
+  const container = requireObject(parsed, raw, path);
+  const result: Record<string, EventCreateRuleDef> = {};
+  for (const [name, value] of Object.entries(container)) {
+    result[name] = validateEventCreateRule(parsed, value, [...path, name]);
+  }
+  return result;
+}
+
+function validateEventCreateRule(parsed: ParsedConfig, raw: unknown, path: string[]): EventCreateRuleDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, EVENT_CREATE_RULE_KEYS, path);
+  const eventConditions = validateMatchingConditions(parsed, def.eventConditions, [...path, 'eventConditions']);
+  const sourceCopyParameters =
+    def.sourceCopyParameters !== undefined ? requireBoolean(parsed, def.sourceCopyParameters, [...path, 'sourceCopyParameters']) : undefined;
+  const parameterMutations =
+    def.parameterMutations !== undefined
+      ? validateParameterMutations(parsed, def.parameterMutations, [...path, 'parameterMutations'])
+      : undefined;
+  return {
+    eventConditions,
+    ...(sourceCopyParameters !== undefined ? { sourceCopyParameters } : {}),
+    ...(parameterMutations !== undefined ? { parameterMutations } : {}),
+  };
+}
+
+function validateEventEditRules(parsed: ParsedConfig, raw: unknown, path: string[]): Record<string, EventEditRuleDef> {
+  const container = requireObject(parsed, raw, path);
+  const result: Record<string, EventEditRuleDef> = {};
+  for (const [name, value] of Object.entries(container)) {
+    result[name] = validateEventEditRule(parsed, value, [...path, name]);
+  }
+  return result;
+}
+
+function validateEventEditRule(parsed: ParsedConfig, raw: unknown, path: string[]): EventEditRuleDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, EVENT_EDIT_RULE_KEYS, path);
+  const eventConditions = validateMatchingConditions(parsed, def.eventConditions, [...path, 'eventConditions']);
+  const parameterMutations = validateParameterMutations(parsed, def.parameterMutations, [...path, 'parameterMutations'], { requireNonEmpty: true });
+  return { eventConditions, parameterMutations };
+}
+
+/** GA4 caps `eventConditions` at 1-10 entries. */
+function validateMatchingConditions(parsed: ParsedConfig, raw: unknown, path: string[]): MatchingConditionDef[] {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 10) {
+    fail(parsed, path, [
+      { label: 'Expected', value: 'array of 1-10 conditions' },
+      { label: 'Received', value: Array.isArray(raw) ? `array of ${raw.length}` : describeType(raw) },
+    ]);
+  }
+  return raw.map((item, index) => validateMatchingCondition(parsed, item, [...path, String(index)]));
+}
+
+function validateMatchingCondition(parsed: ParsedConfig, raw: unknown, path: string[]): MatchingConditionDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, MATCHING_CONDITION_KEYS, path);
+  const field = requireString(parsed, def.field, [...path, 'field']);
+  const comparisonType = requireEnum(parsed, def.comparisonType, COMPARISON_TYPES, [...path, 'comparisonType']);
+  const value = requireString(parsed, def.value, [...path, 'value']);
+  const negated = def.negated !== undefined ? requireBoolean(parsed, def.negated, [...path, 'negated']) : undefined;
+  return { field, comparisonType, value, ...(negated !== undefined ? { negated } : {}) };
+}
+
+/** GA4 caps `parameterMutations` at 20 entries; `eventEditRules` additionally requires at least one. */
+function validateParameterMutations(
+  parsed: ParsedConfig,
+  raw: unknown,
+  path: string[],
+  opts: { requireNonEmpty?: boolean } = {},
+): ParameterMutationDef[] {
+  if (!Array.isArray(raw) || raw.length > 20 || (opts.requireNonEmpty && raw.length === 0)) {
+    fail(parsed, path, [
+      { label: 'Expected', value: opts.requireNonEmpty ? 'array of 1-20 mutations' : 'array of at most 20 mutations' },
+      { label: 'Received', value: Array.isArray(raw) ? `array of ${raw.length}` : describeType(raw) },
+    ]);
+  }
+  return raw.map((item, index) => validateParameterMutation(parsed, item, [...path, String(index)]));
+}
+
+function validateParameterMutation(parsed: ParsedConfig, raw: unknown, path: string[]): ParameterMutationDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, PARAMETER_MUTATION_KEYS, path);
+  return {
+    parameter: requireString(parsed, def.parameter, [...path, 'parameter']),
+    parameterValue: requireString(parsed, def.parameterValue, [...path, 'parameterValue']),
   };
 }
 

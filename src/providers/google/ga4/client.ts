@@ -41,11 +41,17 @@ export interface EnhancedMeasurementSettings {
 }
 
 const KINDS = {
-  dimension: { collection: 'customDimensions', field: 'customDimensions', type: 'ga4.dimension', archivable: true, v1alpha: false },
-  metric: { collection: 'customMetrics', field: 'customMetrics', type: 'ga4.metric', archivable: true, v1alpha: false },
-  keyEvent: { collection: 'keyEvents', field: 'keyEvents', type: 'ga4.keyEvent', archivable: false, v1alpha: false },
+  dimension: { collection: 'customDimensions', field: 'customDimensions', type: 'ga4.dimension', archivable: true, v1alpha: false, scope: 'property' },
+  metric: { collection: 'customMetrics', field: 'customMetrics', type: 'ga4.metric', archivable: true, v1alpha: false, scope: 'property' },
+  keyEvent: { collection: 'keyEvents', field: 'keyEvents', type: 'ga4.keyEvent', archivable: false, v1alpha: false, scope: 'property' },
   /** Audiences live under `v1alpha`, unlike the other three kinds (confirmed live 2026-08-29). */
-  audience: { collection: 'audiences', field: 'audiences', type: 'ga4.audience', archivable: true, v1alpha: true },
+  audience: { collection: 'audiences', field: 'audiences', type: 'ga4.audience', archivable: true, v1alpha: true, scope: 'property' },
+  /**
+   * Nested under a data stream, not the property (confirmed live 2026-08-29: 404s on `v1beta`,
+   * `properties.dataStreams.eventCreateRules` in the reference docs). Real DELETE, no archive.
+   */
+  eventCreateRule: { collection: 'eventCreateRules', field: 'eventCreateRules', type: 'ga4.eventCreateRule', archivable: false, v1alpha: true, scope: 'stream' },
+  eventEditRule: { collection: 'eventEditRules', field: 'eventEditRules', type: 'ga4.eventEditRule', archivable: false, v1alpha: true, scope: 'stream' },
 } as const;
 
 export type Ga4Kind = keyof typeof KINDS;
@@ -62,10 +68,22 @@ function stripTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
-/** By this tool's convention parameterName / eventName / displayName is the config key itself. */
+/**
+ * By this tool's convention parameterName / eventName / displayName is the config key itself.
+ * `eventCreateRule` has no label field of its own; `destinationEvent` is the practical identity
+ * field, with the same non-uniqueness caveat `keyEvent`'s `eventName` already carries.
+ */
+const RESOURCE_ID_FIELD: Record<Ga4Kind, string> = {
+  dimension: 'parameterName',
+  metric: 'parameterName',
+  keyEvent: 'eventName',
+  audience: 'displayName',
+  eventCreateRule: 'destinationEvent',
+  eventEditRule: 'displayName',
+};
+
 function resourceId(kind: Ga4Kind, object: Ga4Object): string {
-  const key = kind === 'keyEvent' ? 'eventName' : kind === 'audience' ? 'displayName' : 'parameterName';
-  return String(object[key] ?? object.name ?? '');
+  return String(object[RESOURCE_ID_FIELD[kind]] ?? object.name ?? '');
 }
 
 export class Ga4Client {
@@ -74,8 +92,13 @@ export class Ga4Client {
     private readonly propertyId: string,
   ) {}
 
-  private collectionUrl(kind: Ga4Kind): string {
+  /** `streamName` (a data stream's full resource path) is required when `kind` is stream-scoped. */
+  private collectionUrl(kind: Ga4Kind, streamName?: string): string {
     const base = KINDS[kind].v1alpha ? V1ALPHA_BASE_URL : BASE_URL;
+    if (KINDS[kind].scope === 'stream') {
+      if (!streamName) throw new Error(`ga4.${kind} is stream-scoped but no stream was resolved.`);
+      return `${base}/${streamName}/${KINDS[kind].collection}`;
+    }
     return `${base}/properties/${this.propertyId}/${KINDS[kind].collection}`;
   }
 
@@ -89,13 +112,13 @@ export class Ga4Client {
    * page unless asked otherwise, and a partial listing would look to `diff`
    * like resources that do not exist remotely, so `apply` would duplicate them.
    */
-  async list(kind: Ga4Kind): Promise<Ga4Object[]> {
+  async list(kind: Ga4Kind, streamName?: string): Promise<Ga4Object[]> {
     const objects: Ga4Object[] = [];
     let pageToken: string | undefined;
     try {
       do {
         const response = await this.auth.request<Ga4ListResponse>({
-          url: this.collectionUrl(kind),
+          url: this.collectionUrl(kind, streamName),
           params: { pageSize: GA4_MAX_PAGE_SIZE, ...(pageToken ? { pageToken } : {}) },
         });
         objects.push(...((response.data[KINDS[kind].field] as Ga4Object[] | undefined) ?? []));
@@ -107,9 +130,9 @@ export class Ga4Client {
     return objects;
   }
 
-  /** Remote state as the generic Resource model, keyed by parameterName/eventName. */
-  async listResources(kind: Ga4Kind): Promise<Resource[]> {
-    const objects = await this.list(kind);
+  /** Remote state as the generic Resource model, keyed by parameterName/eventName/displayName/destinationEvent. */
+  async listResources(kind: Ga4Kind, streamName?: string): Promise<Resource[]> {
+    const objects = await this.list(kind, streamName);
     return objects.map((object) => ({
       id: resourceId(kind, object),
       type: KINDS[kind].type,
@@ -119,8 +142,8 @@ export class Ga4Client {
   }
 
   /** Owned resources only — GA4 has no ownership field, so `.analytics/state.json` decides. */
-  async listManaged(kind: Ga4Kind, state: StateFile): Promise<Resource[]> {
-    const objects = await this.list(kind);
+  async listManaged(kind: Ga4Kind, state: StateFile, streamName?: string): Promise<Resource[]> {
+    const objects = await this.list(kind, streamName);
     const resources: Resource[] = [];
     for (const object of objects) {
       if (!object.name) continue;
@@ -137,10 +160,10 @@ export class Ga4Client {
     return stateKey('google', KINDS[kind].type, this.propertyId, resourceId);
   }
 
-  async create(kind: Ga4Kind, payload: Ga4Object): Promise<Ga4Object> {
+  async create(kind: Ga4Kind, payload: Ga4Object, streamName?: string): Promise<Ga4Object> {
     const id = resourceId(kind, payload);
     try {
-      const response = await this.auth.request<Ga4Object>({ url: this.collectionUrl(kind), method: 'POST', data: payload });
+      const response = await this.auth.request<Ga4Object>({ url: this.collectionUrl(kind, streamName), method: 'POST', data: payload });
       return response.data;
     } catch (error) {
       throw new Ga4ApiError(`create ${kind}`, id, extractApiStatus(error), { cause: error });
@@ -162,7 +185,7 @@ export class Ga4Client {
     }
   }
 
-  /** Key events support a real DELETE; dimensions/metrics/audiences only support :archive (GA4 has no hard delete for them). */
+  /** Key events and event create/edit rules support a real DELETE; dimensions/metrics/audiences only support :archive (GA4 has no hard delete for them). */
   async delete(kind: Ga4Kind, name: string): Promise<void> {
     try {
       if (KINDS[kind].archivable) {

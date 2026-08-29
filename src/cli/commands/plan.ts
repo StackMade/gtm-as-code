@@ -11,14 +11,16 @@ import { GtmClient, resolveWorkspaceId, gtmIdField, type GtmKind, type GtmObject
 import { fromGtmPayload } from '../../providers/google/gtm/mapping.js';
 import { BUILT_IN_VARIABLES } from '../../providers/google/gtm/builtin-variables.js';
 import { Ga4Client, type Ga4Kind, type Ga4Object } from '../../providers/google/ga4/client.js';
-import { diffGa4Settings, hasGa4SettingsChanges, type Ga4SettingsDiff } from '../../providers/google/ga4/settings.js';
+import { diffGa4Settings, hasGa4SettingsChanges, resolveGa4Stream, type Ga4SettingsDiff } from '../../providers/google/ga4/settings.js';
 import { fromGa4Payload } from '../../providers/google/ga4/mapping.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
 import type { AnalyticsConfig } from '../../config/schema.js';
 
 const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
-const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent', 'audience'];
+const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent', 'audience', 'eventCreateRule', 'eventEditRule'];
+/** Stream-scoped GA4 kinds need a resolved data stream `name` passed to `listManaged`. */
+const GA4_STREAM_SCOPED_KINDS: ReadonlySet<Ga4Kind> = new Set(['eventCreateRule', 'eventEditRule']);
 
 const KIND_LABEL: Record<string, string> = {
   'gtm.folder': 'folder',
@@ -29,6 +31,8 @@ const KIND_LABEL: Record<string, string> = {
   'ga4.metric': 'custom metric',
   'ga4.keyEvent': 'key event',
   'ga4.audience': 'audience',
+  'ga4.eventCreateRule': 'event create rule',
+  'ga4.eventEditRule': 'event edit rule',
 };
 
 export interface PlanResult {
@@ -101,6 +105,10 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     if (typeof gtmId === 'string') triggerGtmIdToLogicalId[gtmId] = resource.id;
   }
 
+  // Event create/edit rules are stream-scoped, so the stream must be resolved before `listManaged`
+  // can query them; resolving it here also lets `diffGa4Settings` skip its own lookup below.
+  const resolvedStream = config.ga4.streamWebsiteUrl ? await resolveGa4Stream(ga4, config.ga4.streamWebsiteUrl) : undefined;
+
   // Folders and triggers had to be read first — reverse mapping needs them — but nothing
   // below depends on anything else here, so the remaining listings go out together.
   const [gtmManaged, ga4Managed, enabledBuiltInVariables, ga4Settings] = await Promise.all([
@@ -110,9 +118,14 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
         resources: kind === 'folder' ? managedFolders : kind === 'trigger' ? managedTriggers : await gtm.listManaged(kind),
       })),
     ),
-    Promise.all(GA4_KINDS.map(async (kind) => ({ kind, resources: await ga4.listManaged(kind, state) }))),
+    Promise.all(
+      GA4_KINDS.map(async (kind) => ({
+        kind,
+        resources: GA4_STREAM_SCOPED_KINDS.has(kind) && !resolvedStream ? [] : await ga4.listManaged(kind, state, resolvedStream?.name),
+      })),
+    ),
     gtm.listEnabledBuiltInVariables(),
-    diffGa4Settings(ga4, config.ga4),
+    diffGa4Settings(ga4, config.ga4, resolvedStream),
   ]);
 
   const builtInVariablesToEnable = config.gtm.builtInVariables

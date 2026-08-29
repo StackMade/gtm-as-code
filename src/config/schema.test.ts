@@ -462,3 +462,99 @@ ga4:
 `;
   assert.throws(() => validate(yaml), ConfigError);
 });
+
+test('ga4.eventCreateRules requires ga4.streamWebsiteUrl to be set', () => {
+  const yaml = `
+ga4:
+  eventCreateRules:
+    custom_purchase:
+      eventConditions:
+        - { field: event_name, comparisonType: EQUALS, value: purchase }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.eventCreateRules accepts a rule when streamWebsiteUrl is set', () => {
+  const yaml = `
+ga4:
+  streamWebsiteUrl: https://example.com
+  eventCreateRules:
+    custom_purchase:
+      eventConditions:
+        - { field: event_name, comparisonType: EQUALS, value: purchase }
+      sourceCopyParameters: true
+      parameterMutations:
+        - { parameter: currency, parameterValue: USD }
+`;
+  const config = validate(yaml);
+  assert.equal(config.ga4.eventCreateRules.custom_purchase.sourceCopyParameters, true);
+  assert.deepEqual(config.ga4.eventCreateRules.custom_purchase.eventConditions, [
+    { field: 'event_name', comparisonType: 'EQUALS', value: 'purchase' },
+  ]);
+});
+
+test('ga4.eventCreateRules rejects more than 10 eventConditions', () => {
+  const conditions = Array.from({ length: 11 }, (_, i) => `        - { field: f${i}, comparisonType: EQUALS, value: v }`).join('\n');
+  const yaml = `
+ga4:
+  streamWebsiteUrl: https://example.com
+  eventCreateRules:
+    broken:
+      eventConditions:
+${conditions}
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.eventCreateRules rejects an unknown comparisonType', () => {
+  const yaml = `
+ga4:
+  streamWebsiteUrl: https://example.com
+  eventCreateRules:
+    broken:
+      eventConditions:
+        - { field: event_name, comparisonType: NOT_A_TYPE, value: purchase }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.eventCreateRules rejects more than 20 parameterMutations', () => {
+  const mutations = Array.from({ length: 21 }, (_, i) => `        - { parameter: p${i}, parameterValue: v }`).join('\n');
+  const yaml = `
+ga4:
+  streamWebsiteUrl: https://example.com
+  eventCreateRules:
+    broken:
+      eventConditions:
+        - { field: event_name, comparisonType: EQUALS, value: purchase }
+      parameterMutations:
+${mutations}
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.eventEditRules accepts a rule and requires a non-empty parameterMutations array', () => {
+  const yaml = `
+ga4:
+  streamWebsiteUrl: https://example.com
+  eventEditRules:
+    rewrite_currency:
+      eventConditions:
+        - { field: event_name, comparisonType: EQUALS, value: purchase, negated: false }
+      parameterMutations:
+        - { parameter: currency, parameterValue: USD }
+`;
+  const config = validate(yaml);
+  assert.deepEqual(config.ga4.eventEditRules.rewrite_currency.parameterMutations, [{ parameter: 'currency', parameterValue: 'USD' }]);
+
+  const emptyMutations = `
+ga4:
+  streamWebsiteUrl: https://example.com
+  eventEditRules:
+    broken:
+      eventConditions:
+        - { field: event_name, comparisonType: EQUALS, value: purchase }
+      parameterMutations: []
+`;
+  assert.throws(() => validate(emptyMutations), ConfigError);
+});

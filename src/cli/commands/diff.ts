@@ -16,6 +16,8 @@ const KIND_LABEL: Record<string, string> = {
   'ga4.metric': 'custom metric',
   'ga4.keyEvent': 'key event',
   'ga4.audience': 'audience',
+  'ga4.eventCreateRule': 'event create rule',
+  'ga4.eventEditRule': 'event edit rule',
 };
 
 export interface DiffResult {

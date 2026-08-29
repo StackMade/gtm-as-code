@@ -303,8 +303,17 @@ GA4 hardening is a hard prerequisite for all of it.
   live: `sessionCount`/`eventCount` aren't valid audience filter fields even though they're valid
   GA4 dimensions/metrics elsewhere, and an archived audience drops out of `list()` entirely, so no
   extra archived-filtering logic was needed beyond the existing `archivable` handling.
-- Event create and modify rules. Server-side event rewriting, currently invisible to anyone reading
-  the site's code.
+- Event create and modify rules. **Done.** `ga4.eventCreateRules`/`ga4.eventEditRules` model server-
+  side event rewriting as create/update/delete `Resource`s, nested under a data stream rather than
+  the property (confirmed live 2026-08-29: both 404 on `v1beta`), so both require
+  `ga4.streamWebsiteUrl`, following the precedent `enhancedMeasurement` set for stream-scoped config.
+  Unlike audiences, GA4 supports a real `DELETE`, no archive step. A create rule's config key is its
+  `destinationEvent` (it has no separate label field); an edit rule's config key is its
+  `displayName`. Also confirmed live: optional fields left unset (`sourceCopyParameters`, `negated`)
+  are omitted on the wire rather than sent as `false`, so the reverse mapper omits them too, and an
+  edit rule's `processingOrder` is read-only, GA4 rejects it in any `updateMask`, so it's never part
+  of config and reordering rules isn't supported. `pull` only fetches these two kinds when the
+  property has exactly one web data stream to resolve to.
 - Calculated metrics and channel groups.
 - Search Console link. Google Ads and BigQuery links are deliberately excluded, and not planned for
   any later milestone either.

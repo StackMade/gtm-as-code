@@ -287,6 +287,21 @@ ga4:
               numeric: { operation: EQUAL | LESS_THAN | GREATER_THAN, value: number } |
               between: { from: number, to: number } }
             event: { eventName: string, eventParameterFilterExpression: <filter> }  # eventParameterFilterExpression optional
+  eventCreateRules:
+    <name>:  # <name> is the rule's destinationEvent
+      eventConditions:
+        - { field: string, comparisonType: string, value: string, negated: boolean }  # 1-10, negated optional
+      sourceCopyParameters: boolean  # optional
+      parameterMutations:  # optional, up to 20
+        - { parameter: string, parameterValue: string }
+    # requires streamWebsiteUrl to be set
+  eventEditRules:
+    <name>:  # <name> is the rule's displayName
+      eventConditions:
+        - { field: string, comparisonType: string, value: string, negated: boolean }  # 1-10, negated optional
+      parameterMutations:  # required, 1-20
+        - { parameter: string, parameterValue: string }
+    # requires streamWebsiteUrl to be set
 ```
 
 Only `type` (and, for tags, `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`) is
@@ -328,6 +343,20 @@ exactly one of those keys set at each level; GA4 also requires every clause's to
 be an `and` of `or`s, which validation adds automatically, so a single bare condition
 (`filter: { event: { eventName: ... } } }`) is enough and never needs writing out by hand.
 `sequenceFilter` isn't implemented.
+
+`ga4.eventCreateRules` and `ga4.eventEditRules` are also create/update/delete `Resource`s, but
+nested under a data stream rather than the property (confirmed live 2026-08-29: both 404 on
+`v1beta`), so both require `streamWebsiteUrl`. Unlike audiences, GA4 supports a real `DELETE` for
+both, no archive step. A create rule's config key is its `destinationEvent` (it has no separate
+label field, the same non-uniqueness caveat `ga4.keyEvents`' `eventName` already carries); an edit
+rule's config key is its `displayName`. `comparisonType` accepts GA4's standard set
+(`EQUALS`/`CONTAINS`/`STARTS_WITH`/`ENDS_WITH`/`GREATER_THAN`/`LESS_THAN`, their
+`_CASE_INSENSITIVE`/`_OR_EQUAL` variants, and `REGULAR_EXPRESSION*`, web-stream only, not enforced
+here). Edit rules also carry a GA4-assigned `processingOrder` (their evaluation order relative to
+other edit rules on the same stream) that's read-only through this API (confirmed live that GA4
+rejects it in any `updateMask`), so it's never part of config and never round-tripped back from a
+`pull`; reordering rules isn't supported. `pull` only fetches these two kinds when the property has
+exactly one web data stream to resolve to; with more than one, it skips them and prints why.
 
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),

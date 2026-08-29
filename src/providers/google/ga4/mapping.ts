@@ -5,6 +5,10 @@ import type {
   AudienceEventFilterDef,
   AudienceFilterClauseDef,
   AudienceFilterExpressionDef,
+  EventCreateRuleDef,
+  EventEditRuleDef,
+  MatchingConditionDef,
+  ParameterMutationDef,
 } from '../../../config/schema.js';
 
 export function toGa4Payload(kind: Ga4Kind, resourceId: string, desiredState: Record<string, unknown>): Ga4Object {
@@ -28,6 +32,14 @@ export function toGa4Payload(kind: Ga4Kind, resourceId: string, desiredState: Re
     return toAudiencePayload(resourceId, desiredState as unknown as AudienceDef);
   }
 
+  if (kind === 'eventCreateRule') {
+    return toEventCreateRulePayload(resourceId, desiredState as unknown as EventCreateRuleDef);
+  }
+
+  if (kind === 'eventEditRule') {
+    return toEventEditRulePayload(resourceId, desiredState as unknown as EventEditRuleDef);
+  }
+
   return {
     eventName: resourceId,
     countingMethod: String(desiredState.countingMethod ?? 'ONCE_PER_EVENT'),
@@ -47,7 +59,82 @@ export function fromGa4Payload(kind: Ga4Kind, object: Ga4Object): Record<string,
     return fromAudiencePayload(object) as unknown as Record<string, unknown>;
   }
 
+  if (kind === 'eventCreateRule') {
+    return fromEventCreateRulePayload(object) as unknown as Record<string, unknown>;
+  }
+
+  if (kind === 'eventEditRule') {
+    return fromEventEditRulePayload(object) as unknown as Record<string, unknown>;
+  }
+
   return {};
+}
+
+function toEventCreateRulePayload(resourceId: string, def: EventCreateRuleDef): Ga4Object {
+  return {
+    destinationEvent: resourceId,
+    eventConditions: def.eventConditions.map(toMatchingCondition),
+    ...(def.sourceCopyParameters !== undefined ? { sourceCopyParameters: def.sourceCopyParameters } : {}),
+    ...(def.parameterMutations ? { parameterMutations: def.parameterMutations.map(toParameterMutation) } : {}),
+  };
+}
+
+/** `processingOrder` is output-only (GA4 rejects it in any `updateMask`, confirmed live 2026-08-29) — never sent. */
+function toEventEditRulePayload(resourceId: string, def: EventEditRuleDef): Ga4Object {
+  return {
+    displayName: resourceId,
+    eventConditions: def.eventConditions.map(toMatchingCondition),
+    parameterMutations: def.parameterMutations.map(toParameterMutation),
+  };
+}
+
+function toMatchingCondition(def: MatchingConditionDef): Record<string, unknown> {
+  return {
+    field: def.field,
+    comparisonType: def.comparisonType,
+    value: def.value,
+    ...(def.negated !== undefined ? { negated: def.negated } : {}),
+  };
+}
+
+function toParameterMutation(def: ParameterMutationDef): Record<string, unknown> {
+  return { parameter: def.parameter, parameterValue: def.parameterValue };
+}
+
+/**
+ * `name` and `destinationEvent` aren't stored here (both derive from `resourceId`, like `keyEvent`'s
+ * `eventName`), same as `audience` drops `name`/`displayName`.
+ */
+function fromEventCreateRulePayload(object: Ga4Object): EventCreateRuleDef {
+  return {
+    eventConditions: ((object.eventConditions as unknown[]) ?? []).map(fromMatchingCondition),
+    ...(object.sourceCopyParameters !== undefined ? { sourceCopyParameters: Boolean(object.sourceCopyParameters) } : {}),
+    ...(object.parameterMutations ? { parameterMutations: (object.parameterMutations as unknown[]).map(fromParameterMutation) } : {}),
+  };
+}
+
+/** `name`/`displayName`/`processingOrder` all dropped — `processingOrder` is output-only, keeping it
+ *  here would create permanent phantom drift since `toEventEditRulePayload` never sends it back. */
+function fromEventEditRulePayload(object: Ga4Object): EventEditRuleDef {
+  return {
+    eventConditions: ((object.eventConditions as unknown[]) ?? []).map(fromMatchingCondition),
+    parameterMutations: ((object.parameterMutations as unknown[]) ?? []).map(fromParameterMutation),
+  };
+}
+
+function fromMatchingCondition(raw: unknown): MatchingConditionDef {
+  const condition = raw as Record<string, unknown>;
+  return {
+    field: String(condition.field),
+    comparisonType: String(condition.comparisonType),
+    value: String(condition.value),
+    ...(condition.negated !== undefined ? { negated: Boolean(condition.negated) } : {}),
+  };
+}
+
+function fromParameterMutation(raw: unknown): ParameterMutationDef {
+  const mutation = raw as Record<string, unknown>;
+  return { parameter: String(mutation.parameter), parameterValue: String(mutation.parameterValue) };
 }
 
 function toAudiencePayload(resourceId: string, def: AudienceDef): Ga4Object {

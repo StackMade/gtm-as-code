@@ -62,3 +62,26 @@ test('listManaged returns nothing when state has no entries for this property', 
 
   assert.deepEqual(managed, []);
 });
+
+test('list on a stream-scoped kind requests the stream collection, not the property one', async () => {
+  const requests: string[] = [];
+  const auth = {
+    request: async (options: { url: string }) => {
+      requests.push(options.url);
+      return { data: { eventCreateRules: [] } };
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new Ga4Client(auth as any, '1');
+
+  await client.list('eventCreateRule', 'properties/1/dataStreams/2');
+
+  assert.deepEqual(requests, ['https://analyticsadmin.googleapis.com/v1alpha/properties/1/dataStreams/2/eventCreateRules']);
+});
+
+test('list on a stream-scoped kind throws when no stream name is given', async () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new Ga4Client(fakeAuth({}) as any, '1');
+
+  await assert.rejects(() => client.list('eventCreateRule'), /stream-scoped/);
+});

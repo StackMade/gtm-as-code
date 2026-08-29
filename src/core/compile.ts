@@ -128,6 +128,8 @@ export function toResources(config: AnalyticsConfig): Resource[] {
   for (const [id, def] of Object.entries(config.ga4.metrics)) push(id, 'ga4.metric', def);
   for (const [id, def] of Object.entries(config.ga4.keyEvents)) push(id, 'ga4.keyEvent', def);
   for (const [id, def] of Object.entries(config.ga4.audiences)) push(id, 'ga4.audience', def);
+  for (const [id, def] of Object.entries(config.ga4.eventCreateRules)) push(id, 'ga4.eventCreateRule', def);
+  for (const [id, def] of Object.entries(config.ga4.eventEditRules)) push(id, 'ga4.eventEditRule', def);
 
   return resources;
 }
