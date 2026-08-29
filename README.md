@@ -255,6 +255,8 @@ ga4:
     # manages event data retention only, userDataRetention is untouched
     # THIRTY_EIGHT_MONTHS and FIFTY_MONTHS are only valid on GA4 360 properties
   googleSignals: GOOGLE_SIGNALS_ENABLED | GOOGLE_SIGNALS_DISABLED
+    # Google Signals must already be activated on the property through the GA4 UI once;
+    # this tool can only change its state after that, not activate it
   enhancedMeasurement:
     scrollsEnabled: boolean
     outboundClicksEnabled: boolean

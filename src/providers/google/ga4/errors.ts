@@ -28,4 +28,8 @@ const REMEDIATION: Record<string, string> = {
   NOT_FOUND: 'The property id may be wrong, or the resource was deleted remotely.',
   ALREADY_EXISTS: 'A resource with this name already exists on the property.',
   INVALID_ARGUMENT: 'GA4 rejected one of the field values — see the Google API detail above.',
+  FAILED_PRECONDITION:
+    'A GA4 precondition this tool cannot satisfy through the API was not met. For googleSignals, ' +
+    'Google Signals must first be activated on the property through the GA4 UI (accepting its terms) ' +
+    'before its state can be changed here.',
 };
