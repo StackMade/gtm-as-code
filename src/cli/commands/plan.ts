@@ -3,7 +3,7 @@ import { loadConfig } from '../../config/loader.js';
 import { interpolateConfig } from '../../config/interpolation.js';
 import { validateConfig } from '../../config/schema.js';
 import { compileEvents, toResources } from '../../core/compile.js';
-import { diff } from '../../core/diff.js';
+import { diff, deepEqual } from '../../core/diff.js';
 import type { Change, Resource } from '../../core/resource.js';
 import { readState } from '../../core/state.js';
 import { authorize, SCOPES } from '../../providers/google/auth/index.js';
@@ -18,7 +18,7 @@ import type { GlobalOptions } from '../options.js';
 import type { AnalyticsConfig } from '../../config/schema.js';
 
 const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
-const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent'];
+const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent', 'audience'];
 
 const KIND_LABEL: Record<string, string> = {
   'gtm.folder': 'folder',
@@ -28,6 +28,7 @@ const KIND_LABEL: Record<string, string> = {
   'ga4.dimension': 'custom dimension',
   'ga4.metric': 'custom metric',
   'ga4.keyEvent': 'key event',
+  'ga4.audience': 'audience',
 };
 
 export interface PlanResult {
@@ -141,6 +142,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
 
   const desired = toResources(compiled);
   const changes = diff(desired, remote);
+  checkAudienceImmutableFields(changes);
 
   const counts = { create: 0, update: 0, delete: 0 };
   for (const change of changes) counts[change.operation]++;
@@ -160,6 +162,31 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     builtInVariablesToEnable,
     ga4Settings,
   };
+}
+
+/**
+ * `membershipDurationDays`/`exclusionDurationMode`/`filterClauses` are immutable on GA4's Audience
+ * resource once created (confirmed via GA4's own API reference); `apply` can only PATCH
+ * `displayName`/`description`. Left unchecked, editing a filter would plan an "update", apply would
+ * silently PATCH nothing that matters, and `drift` would flag it forever. Fail here instead, naming
+ * the field, so the fix is obvious: rename the audience (a new config key creates a new audience).
+ */
+const AUDIENCE_IMMUTABLE_FIELDS = ['membershipDurationDays', 'exclusionDurationMode', 'filterClauses'] as const;
+
+export function checkAudienceImmutableFields(changes: Change[]): void {
+  for (const change of changes) {
+    if (change.operation !== 'update' || change.after.type !== 'ga4.audience') continue;
+    const before = change.before.desiredState as Record<string, unknown>;
+    const after = change.after.desiredState as Record<string, unknown>;
+    const changedFields = AUDIENCE_IMMUTABLE_FIELDS.filter((field) => !deepEqual(before[field], after[field]));
+    if (changedFields.length > 0) {
+      throw new Error(
+        `ga4.audiences.${change.after.id} changes ${changedFields.join(', ')}, which GA4 does not allow updating on an ` +
+          'existing audience. Rename this audience (a new config key creates a new one) if you want the new definition, ' +
+          'or revert the change if it was accidental.',
+      );
+    }
+  }
 }
 
 function render(result: PlanResult, format: GlobalOptions['format']): void {

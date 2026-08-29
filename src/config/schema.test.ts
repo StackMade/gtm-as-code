@@ -341,3 +341,124 @@ ga4:
 `;
   assert.throws(() => validate(yaml), ConfigError);
 });
+
+test('ga4.audiences accepts a single leaf filter clause', () => {
+  const yaml = `
+ga4:
+  audiences:
+    pricing_viewers:
+      description: Visitors who viewed the pricing page
+      membershipDurationDays: 30
+      filterClauses:
+        - clauseType: INCLUDE
+          scope: AUDIENCE_FILTER_SCOPE_ACROSS_ALL_SESSIONS
+          filter:
+            event:
+              eventName: view_pricing
+`;
+  const config = validate(yaml);
+  assert.equal(config.ga4.audiences.pricing_viewers.membershipDurationDays, 30);
+  // GA4 requires the top-level filter expression to be an andGroup of orGroups (confirmed live
+  // 2026-08-29) — validation normalizes a bare leaf filter into that shape automatically.
+  assert.deepEqual(config.ga4.audiences.pricing_viewers.filterClauses[0].filter, {
+    and: [{ or: [{ event: { eventName: 'view_pricing' } }] }],
+  });
+});
+
+test('ga4.audiences accepts a nested and/or/not filter with a numeric leaf', () => {
+  const yaml = `
+ga4:
+  audiences:
+    engaged_desktop:
+      description: Engaged desktop visitors
+      membershipDurationDays: 90
+      exclusionDurationMode: EXCLUDE_TEMPORARILY
+      eventTrigger: { eventName: join_audience, logCondition: AUDIENCE_JOINED }
+      filterClauses:
+        - clauseType: INCLUDE
+          scope: AUDIENCE_FILTER_SCOPE_ACROSS_ALL_SESSIONS
+          filter:
+            and:
+              - or:
+                  - dimensionOrMetric: { fieldName: sessionCount, numeric: { operation: GREATER_THAN, value: 2 } }
+              - or:
+                  - not:
+                      dimensionOrMetric: { fieldName: deviceCategory, string: { matchType: EXACT, value: desktop } }
+`;
+  assert.doesNotThrow(() => validate(yaml));
+});
+
+test('ga4.audiences requires a non-empty filterClauses array', () => {
+  const yaml = `
+ga4:
+  audiences:
+    empty_audience:
+      description: No filters
+      membershipDurationDays: 30
+      filterClauses: []
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.audiences rejects a filter expression with zero branches set', () => {
+  const yaml = `
+ga4:
+  audiences:
+    broken:
+      description: broken
+      membershipDurationDays: 30
+      filterClauses:
+        - clauseType: INCLUDE
+          scope: AUDIENCE_FILTER_SCOPE_ACROSS_ALL_SESSIONS
+          filter: {}
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.audiences rejects a filter expression with more than one branch set', () => {
+  const yaml = `
+ga4:
+  audiences:
+    broken:
+      description: broken
+      membershipDurationDays: 30
+      filterClauses:
+        - clauseType: INCLUDE
+          scope: AUDIENCE_FILTER_SCOPE_ACROSS_ALL_SESSIONS
+          filter:
+            event: { eventName: x }
+            dimensionOrMetric: { fieldName: y, string: { matchType: EXACT, value: z } }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.audiences rejects a dimensionOrMetric filter with zero or more than one value type set', () => {
+  const yaml = `
+ga4:
+  audiences:
+    broken:
+      description: broken
+      membershipDurationDays: 30
+      filterClauses:
+        - clauseType: INCLUDE
+          scope: AUDIENCE_FILTER_SCOPE_ACROSS_ALL_SESSIONS
+          filter:
+            dimensionOrMetric: { fieldName: deviceCategory }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
+test('ga4.audiences rejects membershipDurationDays that is not a number', () => {
+  const yaml = `
+ga4:
+  audiences:
+    broken:
+      description: broken
+      membershipDurationDays: "30"
+      filterClauses:
+        - clauseType: INCLUDE
+          scope: AUDIENCE_FILTER_SCOPE_ACROSS_ALL_SESSIONS
+          filter: { event: { eventName: x } }
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});

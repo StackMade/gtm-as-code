@@ -265,6 +265,28 @@ ga4:
     fileDownloadsEnabled: boolean
     formInteractionsEnabled: boolean
     # requires streamWebsiteUrl to be set
+  audiences:
+    <name>:
+      description: string
+      membershipDurationDays: number
+      exclusionDurationMode: EXCLUDE_TEMPORARILY | EXCLUDE_PERMANENTLY  # optional
+      eventTrigger: { eventName: string, logCondition: AUDIENCE_JOINED | AUDIENCE_MEMBERSHIP_RENEWED }  # optional
+      protected: boolean  # optional
+      filterClauses:
+        - clauseType: INCLUDE | EXCLUDE
+          scope: AUDIENCE_FILTER_SCOPE_WITHIN_SAME_SESSION | AUDIENCE_FILTER_SCOPE_WITHIN_SAME_EVENT
+            | AUDIENCE_FILTER_SCOPE_ACROSS_ALL_SESSIONS
+          filter:
+            # exactly one of the following, and/or/not may nest recursively:
+            and: [<filter>, ...]
+            or: [<filter>, ...]
+            not: <filter>
+            dimensionOrMetric: { fieldName: string, atAnyPointInTime: boolean,
+              string: { matchType: string, value: string, caseSensitive: boolean } |
+              inList: { values: [string], caseSensitive: boolean } |
+              numeric: { operation: EQUAL | LESS_THAN | GREATER_THAN, value: number } |
+              between: { from: number, to: number } }
+            event: { eventName: string, eventParameterFilterExpression: <filter> }  # eventParameterFilterExpression optional
 ```
 
 Only `type` (and, for tags, `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`) is
@@ -294,6 +316,18 @@ drift. `dataRetention` and `googleSignals` are property-level and apply regardle
 it requires that field. `googleSignals` and `enhancedMeasurement` live under the GA4 Admin API's
 `v1alpha`, not `v1beta` like everything else this tool touches, since GA4 hasn't promoted them to
 `v1beta` yet; this tool routes each request to the right version internally.
+
+`ga4.audiences` are create/update/archive `Resource`s like dimensions and key events, not
+settings-diffed like the property/stream fields above, since GA4's Admin API has no audience `delete`,
+only `archive`, and an archived audience drops out of `list()`. `membershipDurationDays`,
+`exclusionDurationMode`, and `filterClauses` cannot be changed on an existing audience through the
+API; `plan` fails with an error naming the field rather than attempting a PATCH GA4 would reject.
+Only `description` (mapped from the config key's `<name>`, i.e. `displayName`) can be updated in
+place. A `filter`'s `and`/`or`/`not`/`dimensionOrMetric`/`event` nesting is validated to have
+exactly one of those keys set at each level; GA4 also requires every clause's top-level filter to
+be an `and` of `or`s, which validation adds automatically, so a single bare condition
+(`filter: { event: { eventName: ... } } }`) is enough and never needs writing out by hand.
+`sequenceFilter` isn't implemented.
 
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),

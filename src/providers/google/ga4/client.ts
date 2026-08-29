@@ -41,9 +41,11 @@ export interface EnhancedMeasurementSettings {
 }
 
 const KINDS = {
-  dimension: { collection: 'customDimensions', field: 'customDimensions', type: 'ga4.dimension', archivable: true },
-  metric: { collection: 'customMetrics', field: 'customMetrics', type: 'ga4.metric', archivable: true },
-  keyEvent: { collection: 'keyEvents', field: 'keyEvents', type: 'ga4.keyEvent', archivable: false },
+  dimension: { collection: 'customDimensions', field: 'customDimensions', type: 'ga4.dimension', archivable: true, v1alpha: false },
+  metric: { collection: 'customMetrics', field: 'customMetrics', type: 'ga4.metric', archivable: true, v1alpha: false },
+  keyEvent: { collection: 'keyEvents', field: 'keyEvents', type: 'ga4.keyEvent', archivable: false, v1alpha: false },
+  /** Audiences live under `v1alpha`, unlike the other three kinds (confirmed live 2026-08-29). */
+  audience: { collection: 'audiences', field: 'audiences', type: 'ga4.audience', archivable: true, v1alpha: true },
 } as const;
 
 export type Ga4Kind = keyof typeof KINDS;
@@ -60,9 +62,9 @@ function stripTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
-/** By this tool's convention parameterName / eventName is the config key itself. */
+/** By this tool's convention parameterName / eventName / displayName is the config key itself. */
 function resourceId(kind: Ga4Kind, object: Ga4Object): string {
-  const key = kind === 'keyEvent' ? 'eventName' : 'parameterName';
+  const key = kind === 'keyEvent' ? 'eventName' : kind === 'audience' ? 'displayName' : 'parameterName';
   return String(object[key] ?? object.name ?? '');
 }
 
@@ -73,7 +75,13 @@ export class Ga4Client {
   ) {}
 
   private collectionUrl(kind: Ga4Kind): string {
-    return `${BASE_URL}/properties/${this.propertyId}/${KINDS[kind].collection}`;
+    const base = KINDS[kind].v1alpha ? V1ALPHA_BASE_URL : BASE_URL;
+    return `${base}/properties/${this.propertyId}/${KINDS[kind].collection}`;
+  }
+
+  private objectUrl(kind: Ga4Kind, name: string): string {
+    const base = KINDS[kind].v1alpha ? V1ALPHA_BASE_URL : BASE_URL;
+    return `${base}/${name}`;
   }
 
   /**
@@ -143,7 +151,7 @@ export class Ga4Client {
   async update(kind: Ga4Kind, name: string, patch: Ga4Object, updateMask: string[]): Promise<Ga4Object> {
     try {
       const response = await this.auth.request<Ga4Object>({
-        url: `${BASE_URL}/${name}`,
+        url: this.objectUrl(kind, name),
         method: 'PATCH',
         params: { updateMask: updateMask.join(',') },
         data: patch,
@@ -154,13 +162,13 @@ export class Ga4Client {
     }
   }
 
-  /** Key events support a real DELETE; dimensions/metrics only support :archive (GA4 has no hard delete for them). */
+  /** Key events support a real DELETE; dimensions/metrics/audiences only support :archive (GA4 has no hard delete for them). */
   async delete(kind: Ga4Kind, name: string): Promise<void> {
     try {
       if (KINDS[kind].archivable) {
-        await this.auth.request({ url: `${BASE_URL}/${name}:archive`, method: 'POST' });
+        await this.auth.request({ url: `${this.objectUrl(kind, name)}:archive`, method: 'POST' });
       } else {
-        await this.auth.request({ url: `${BASE_URL}/${name}`, method: 'DELETE' });
+        await this.auth.request({ url: this.objectUrl(kind, name), method: 'DELETE' });
       }
     } catch (error) {
       throw new Ga4ApiError(`delete ${kind}`, name, extractApiStatus(error), { cause: error });

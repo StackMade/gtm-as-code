@@ -68,6 +68,75 @@ export interface EnhancedMeasurementDef {
   formInteractionsEnabled?: boolean;
 }
 
+export interface AudienceEventTriggerDef {
+  eventName: string;
+  logCondition: string;
+}
+
+export interface AudienceStringFilterDef {
+  matchType: string;
+  value: string;
+  caseSensitive?: boolean;
+}
+
+export interface AudienceInListFilterDef {
+  values: string[];
+  caseSensitive?: boolean;
+}
+
+export interface AudienceNumericFilterDef {
+  operation: string;
+  value: number;
+}
+
+export interface AudienceBetweenFilterDef {
+  from: number;
+  to: number;
+}
+
+export interface AudienceDimensionOrMetricFilterDef {
+  fieldName: string;
+  atAnyPointInTime?: boolean;
+  inAnyNDayPeriod?: number;
+  string?: AudienceStringFilterDef;
+  inList?: AudienceInListFilterDef;
+  numeric?: AudienceNumericFilterDef;
+  between?: AudienceBetweenFilterDef;
+}
+
+export interface AudienceEventFilterDef {
+  eventName: string;
+  /** Itself a full filter expression, scoped to this event's parameters. */
+  parameterFilter?: AudienceFilterExpressionDef;
+}
+
+/** Recursive: exactly one of `and`/`or`/`not`/`dimensionOrMetric`/`event` is set. `sequenceFilter` isn't supported yet. */
+export interface AudienceFilterExpressionDef {
+  and?: AudienceFilterExpressionDef[];
+  or?: AudienceFilterExpressionDef[];
+  not?: AudienceFilterExpressionDef;
+  dimensionOrMetric?: AudienceDimensionOrMetricFilterDef;
+  event?: AudienceEventFilterDef;
+}
+
+export interface AudienceFilterClauseDef {
+  clauseType: 'INCLUDE' | 'EXCLUDE';
+  scope: string;
+  filter: AudienceFilterExpressionDef;
+}
+
+export interface AudienceDef {
+  description: string;
+  /** Immutable once created (GA4 API constraint) — editing it means a new audience, not an update. */
+  membershipDurationDays: number;
+  eventTrigger?: AudienceEventTriggerDef;
+  /** Immutable once created. */
+  exclusionDurationMode?: string;
+  /** Immutable once created. */
+  filterClauses: AudienceFilterClauseDef[];
+  protected?: boolean;
+}
+
 export interface AnalyticsConfig {
   version: 1;
   project: { name: string };
@@ -92,6 +161,7 @@ export interface AnalyticsConfig {
     dataRetention?: string;
     googleSignals?: string;
     enhancedMeasurement?: EnhancedMeasurementDef;
+    audiences: Record<string, AudienceDef>;
   };
 }
 
@@ -104,7 +174,16 @@ const PARAMETER_TYPES = ['string', 'number', 'boolean', 'items'] as const;
 const DIMENSION_KEYS = ['scope', 'parameter', 'protected'];
 const METRIC_KEYS = ['scope', 'parameter', 'measurementUnit', 'protected'];
 const SCOPES = ['event', 'user'] as const;
-const GA4_TOP_LEVEL_KEYS = ['dimensions', 'metrics', 'keyEvents', 'streamWebsiteUrl', 'dataRetention', 'googleSignals', 'enhancedMeasurement'];
+const GA4_TOP_LEVEL_KEYS = [
+  'dimensions',
+  'metrics',
+  'keyEvents',
+  'streamWebsiteUrl',
+  'dataRetention',
+  'googleSignals',
+  'enhancedMeasurement',
+  'audiences',
+];
 /** `RETENTION_DURATION_UNSPECIFIED` is not a settable value, so it's excluded here. */
 const RETENTION_DURATIONS = ['TWO_MONTHS', 'FOURTEEN_MONTHS', 'TWENTY_SIX_MONTHS', 'THIRTY_EIGHT_MONTHS', 'FIFTY_MONTHS'] as const;
 /** `GOOGLE_SIGNALS_STATE_UNSPECIFIED` is not a settable value; `*_CONSENT_*` values are output-only. */
@@ -117,6 +196,23 @@ const ENHANCED_MEASUREMENT_KEYS = [
   'fileDownloadsEnabled',
   'formInteractionsEnabled',
 ];
+const AUDIENCE_KEYS = ['description', 'membershipDurationDays', 'eventTrigger', 'exclusionDurationMode', 'filterClauses', 'protected'];
+const AUDIENCE_EVENT_TRIGGER_KEYS = ['eventName', 'logCondition'];
+const AUDIENCE_LOG_CONDITIONS = ['AUDIENCE_JOINED', 'AUDIENCE_MEMBERSHIP_RENEWED'] as const;
+const AUDIENCE_EXCLUSION_DURATION_MODES = ['EXCLUDE_TEMPORARILY', 'EXCLUDE_PERMANENTLY'] as const;
+const AUDIENCE_CLAUSE_TYPES = ['INCLUDE', 'EXCLUDE'] as const;
+const AUDIENCE_FILTER_SCOPES = [
+  'AUDIENCE_FILTER_SCOPE_WITHIN_SAME_EVENT',
+  'AUDIENCE_FILTER_SCOPE_WITHIN_SAME_SESSION',
+  'AUDIENCE_FILTER_SCOPE_ACROSS_ALL_SESSIONS',
+] as const;
+const AUDIENCE_FILTER_CLAUSE_KEYS = ['clauseType', 'scope', 'filter'];
+const AUDIENCE_FILTER_EXPRESSION_KEYS = ['and', 'or', 'not', 'dimensionOrMetric', 'event'] as const;
+const AUDIENCE_DIMENSION_OR_METRIC_FILTER_KEYS = ['fieldName', 'atAnyPointInTime', 'inAnyNDayPeriod', 'string', 'inList', 'numeric', 'between'];
+const AUDIENCE_ONE_FILTER_KEYS = ['string', 'inList', 'numeric', 'between'] as const;
+const AUDIENCE_STRING_MATCH_TYPES = ['EXACT', 'BEGINS_WITH', 'ENDS_WITH', 'CONTAINS', 'FULL_REGEXP'] as const;
+const AUDIENCE_NUMERIC_OPERATIONS = ['EQUAL', 'LESS_THAN', 'GREATER_THAN'] as const;
+const AUDIENCE_EVENT_FILTER_KEYS = ['eventName', 'parameterFilter'];
 
 export function validateConfig(parsed: ParsedConfig): AnalyticsConfig {
   const root = requireObject(parsed, parsed.data, []);
@@ -395,7 +491,201 @@ function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4']
     dataRetention,
     googleSignals,
     enhancedMeasurement,
+    audiences: validateAudiences(parsed, container.audiences ?? {}, ['ga4', 'audiences']),
   };
+}
+
+function validateAudiences(parsed: ParsedConfig, raw: unknown, path: string[]): Record<string, AudienceDef> {
+  const container = requireObject(parsed, raw, path);
+  const result: Record<string, AudienceDef> = {};
+  for (const [name, value] of Object.entries(container)) {
+    result[name] = validateAudience(parsed, value, [...path, name]);
+  }
+  return result;
+}
+
+function validateAudience(parsed: ParsedConfig, raw: unknown, path: string[]): AudienceDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, AUDIENCE_KEYS, path);
+
+  const description = requireString(parsed, def.description, [...path, 'description']);
+  const membershipDurationDays = requireNumber(parsed, def.membershipDurationDays, [...path, 'membershipDurationDays']);
+  const eventTrigger =
+    def.eventTrigger !== undefined ? validateAudienceEventTrigger(parsed, def.eventTrigger, [...path, 'eventTrigger']) : undefined;
+  const exclusionDurationMode =
+    def.exclusionDurationMode !== undefined
+      ? requireEnum(parsed, def.exclusionDurationMode, AUDIENCE_EXCLUSION_DURATION_MODES, [...path, 'exclusionDurationMode'])
+      : undefined;
+
+  const clausesPath = [...path, 'filterClauses'];
+  if (!Array.isArray(def.filterClauses) || def.filterClauses.length === 0) {
+    fail(parsed, clausesPath, [
+      { label: 'Expected', value: 'non-empty array' },
+      { label: 'Received', value: describeType(def.filterClauses) },
+    ]);
+  }
+  const filterClauses = (def.filterClauses as unknown[]).map((clause, index) =>
+    validateAudienceFilterClause(parsed, clause, [...clausesPath, String(index)]),
+  );
+
+  const isProtected = def.protected !== undefined ? requireBoolean(parsed, def.protected, [...path, 'protected']) : undefined;
+
+  return {
+    description,
+    membershipDurationDays,
+    filterClauses,
+    ...(eventTrigger !== undefined ? { eventTrigger } : {}),
+    ...(exclusionDurationMode !== undefined ? { exclusionDurationMode } : {}),
+    ...(isProtected !== undefined ? { protected: isProtected } : {}),
+  };
+}
+
+function validateAudienceEventTrigger(parsed: ParsedConfig, raw: unknown, path: string[]): AudienceEventTriggerDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, AUDIENCE_EVENT_TRIGGER_KEYS, path);
+  return {
+    eventName: requireString(parsed, def.eventName, [...path, 'eventName']),
+    logCondition: requireEnum(parsed, def.logCondition, AUDIENCE_LOG_CONDITIONS, [...path, 'logCondition']),
+  };
+}
+
+function validateAudienceFilterClause(parsed: ParsedConfig, raw: unknown, path: string[]): AudienceFilterClauseDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, AUDIENCE_FILTER_CLAUSE_KEYS, path);
+  return {
+    clauseType: requireEnum(parsed, def.clauseType, AUDIENCE_CLAUSE_TYPES, [...path, 'clauseType']),
+    scope: requireEnum(parsed, def.scope, AUDIENCE_FILTER_SCOPES, [...path, 'scope']),
+    filter: canonicalizeAudienceFilterExpression(validateAudienceFilterExpression(parsed, def.filter, [...path, 'filter'])),
+  };
+}
+
+/**
+ * GA4 itself requires every clause's top-level filter expression to be an `andGroup` whose direct
+ * children are each an `orGroup` (confirmed live 2026-08-29: GA4 rejects both a bare leaf at the top
+ * and a non-`orGroup` child of an `andGroup`). Writing that by hand for the common single-condition
+ * case would be pure boilerplate, so config accepts any shape and this normalizes it to the one GA4
+ * accepts. Applied once, at validation time, so both the config's own stored value (compared
+ * directly in `plan`'s diff) and GA4's response (which is always already in this canonical shape)
+ * end up structurally identical.
+ */
+function canonicalizeAudienceFilterExpression(expr: AudienceFilterExpressionDef): AudienceFilterExpressionDef {
+  if (expr.and) {
+    return { and: expr.and.map((child) => (child.or !== undefined ? child : { or: [child] })) };
+  }
+  if (expr.or) {
+    return { and: [expr] };
+  }
+  return { and: [{ or: [expr] }] };
+}
+
+/** Recursive, and picky: GA4 itself rejects a filter expression with more than one branch set. */
+function validateAudienceFilterExpression(parsed: ParsedConfig, raw: unknown, path: string[]): AudienceFilterExpressionDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, AUDIENCE_FILTER_EXPRESSION_KEYS, path);
+
+  const present = AUDIENCE_FILTER_EXPRESSION_KEYS.filter((key) => def[key] !== undefined);
+  if (present.length !== 1) {
+    fail(parsed, path, [
+      { label: 'Expected', value: `exactly one of ${AUDIENCE_FILTER_EXPRESSION_KEYS.join(', ')}` },
+      { label: 'Received', value: present.length === 0 ? 'none' : present.join(', ') },
+    ]);
+  }
+
+  const result: AudienceFilterExpressionDef = {};
+  if (def.and !== undefined) {
+    if (!Array.isArray(def.and)) fail(parsed, [...path, 'and'], [{ label: 'Expected', value: 'array' }, { label: 'Received', value: describeType(def.and) }]);
+    result.and = def.and.map((item, i) => validateAudienceFilterExpression(parsed, item, [...path, 'and', String(i)]));
+  }
+  if (def.or !== undefined) {
+    if (!Array.isArray(def.or)) fail(parsed, [...path, 'or'], [{ label: 'Expected', value: 'array' }, { label: 'Received', value: describeType(def.or) }]);
+    result.or = def.or.map((item, i) => validateAudienceFilterExpression(parsed, item, [...path, 'or', String(i)]));
+  }
+  if (def.not !== undefined) {
+    result.not = validateAudienceFilterExpression(parsed, def.not, [...path, 'not']);
+  }
+  if (def.dimensionOrMetric !== undefined) {
+    result.dimensionOrMetric = validateAudienceDimensionOrMetricFilter(parsed, def.dimensionOrMetric, [...path, 'dimensionOrMetric']);
+  }
+  if (def.event !== undefined) {
+    result.event = validateAudienceEventFilter(parsed, def.event, [...path, 'event']);
+  }
+  return result;
+}
+
+function validateAudienceDimensionOrMetricFilter(
+  parsed: ParsedConfig,
+  raw: unknown,
+  path: string[],
+): AudienceDimensionOrMetricFilterDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, AUDIENCE_DIMENSION_OR_METRIC_FILTER_KEYS, path);
+
+  const fieldName = requireString(parsed, def.fieldName, [...path, 'fieldName']);
+  const atAnyPointInTime =
+    def.atAnyPointInTime !== undefined ? requireBoolean(parsed, def.atAnyPointInTime, [...path, 'atAnyPointInTime']) : undefined;
+  const inAnyNDayPeriod =
+    def.inAnyNDayPeriod !== undefined ? requireNumber(parsed, def.inAnyNDayPeriod, [...path, 'inAnyNDayPeriod']) : undefined;
+
+  const present = AUDIENCE_ONE_FILTER_KEYS.filter((key) => def[key] !== undefined);
+  if (present.length !== 1) {
+    fail(parsed, path, [
+      { label: 'Expected', value: `exactly one of ${AUDIENCE_ONE_FILTER_KEYS.join(', ')}` },
+      { label: 'Received', value: present.length === 0 ? 'none' : present.join(', ') },
+    ]);
+  }
+
+  const result: AudienceDimensionOrMetricFilterDef = {
+    fieldName,
+    ...(atAnyPointInTime !== undefined ? { atAnyPointInTime } : {}),
+    ...(inAnyNDayPeriod !== undefined ? { inAnyNDayPeriod } : {}),
+  };
+  if (def.string !== undefined) {
+    const s = requireObject(parsed, def.string, [...path, 'string']);
+    checkUnknownKeys(parsed, s, ['matchType', 'value', 'caseSensitive'], [...path, 'string']);
+    const caseSensitive = s.caseSensitive !== undefined ? requireBoolean(parsed, s.caseSensitive, [...path, 'string', 'caseSensitive']) : undefined;
+    result.string = {
+      matchType: requireEnum(parsed, s.matchType, AUDIENCE_STRING_MATCH_TYPES, [...path, 'string', 'matchType']),
+      value: requireString(parsed, s.value, [...path, 'string', 'value']),
+      ...(caseSensitive !== undefined ? { caseSensitive } : {}),
+    };
+  }
+  if (def.inList !== undefined) {
+    const l = requireObject(parsed, def.inList, [...path, 'inList']);
+    checkUnknownKeys(parsed, l, ['values', 'caseSensitive'], [...path, 'inList']);
+    const caseSensitive = l.caseSensitive !== undefined ? requireBoolean(parsed, l.caseSensitive, [...path, 'inList', 'caseSensitive']) : undefined;
+    result.inList = {
+      values: requireStringArray(parsed, l.values, [...path, 'inList', 'values']),
+      ...(caseSensitive !== undefined ? { caseSensitive } : {}),
+    };
+  }
+  if (def.numeric !== undefined) {
+    const n = requireObject(parsed, def.numeric, [...path, 'numeric']);
+    checkUnknownKeys(parsed, n, ['operation', 'value'], [...path, 'numeric']);
+    result.numeric = {
+      operation: requireEnum(parsed, n.operation, AUDIENCE_NUMERIC_OPERATIONS, [...path, 'numeric', 'operation']),
+      value: requireNumber(parsed, n.value, [...path, 'numeric', 'value']),
+    };
+  }
+  if (def.between !== undefined) {
+    const b = requireObject(parsed, def.between, [...path, 'between']);
+    checkUnknownKeys(parsed, b, ['from', 'to'], [...path, 'between']);
+    result.between = {
+      from: requireNumber(parsed, b.from, [...path, 'between', 'from']),
+      to: requireNumber(parsed, b.to, [...path, 'between', 'to']),
+    };
+  }
+  return result;
+}
+
+function validateAudienceEventFilter(parsed: ParsedConfig, raw: unknown, path: string[]): AudienceEventFilterDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, AUDIENCE_EVENT_FILTER_KEYS, path);
+  const eventName = requireString(parsed, def.eventName, [...path, 'eventName']);
+  const parameterFilter =
+    def.parameterFilter !== undefined
+      ? validateAudienceFilterExpression(parsed, def.parameterFilter, [...path, 'parameterFilter'])
+      : undefined;
+  return { eventName, ...(parameterFilter !== undefined ? { parameterFilter } : {}) };
 }
 
 function validateEnhancedMeasurement(parsed: ParsedConfig, raw: unknown, path: string[]): EnhancedMeasurementDef {
@@ -739,6 +1029,16 @@ function requireBoolean(parsed: ParsedConfig, value: unknown, path: string[]): b
   return value;
 }
 
+function requireNumber(parsed: ParsedConfig, value: unknown, path: string[]): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    fail(parsed, path, [
+      { label: 'Expected', value: 'number' },
+      { label: 'Received', value: describeType(value) },
+    ]);
+  }
+  return value;
+}
+
 function requireStringArray(parsed: ParsedConfig, value: unknown, path: string[]): string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
     fail(parsed, path, [
@@ -764,7 +1064,7 @@ function requireEnum<T extends string>(
   return value as T;
 }
 
-function checkUnknownKeys(parsed: ParsedConfig, obj: Json, allowed: string[], path: string[]): void {
+function checkUnknownKeys(parsed: ParsedConfig, obj: Json, allowed: readonly string[], path: string[]): void {
   for (const key of Object.keys(obj)) {
     if (allowed.includes(key)) continue;
     const suggestion = closestMatch(key, allowed);

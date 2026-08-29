@@ -1,6 +1,6 @@
 import type { Change, Resource } from './resource.js';
 
-function deepEqual(a: unknown, b: unknown): boolean {
+export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (typeof a !== typeof b || a === null || b === null) return false;
   if (typeof a !== 'object') return false;

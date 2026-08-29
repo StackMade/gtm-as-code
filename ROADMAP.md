@@ -292,8 +292,17 @@ GA4 hardening is a hard prerequisite for all of it.
   GA4 Admin API's `v1alpha`, not `v1beta` like everything else this tool touches (confirmed live
   2026-08-29: both 404 on `v1beta`), so `Ga4Client` routes each request to the version it actually
   lives under. Still open: internal and developer traffic filters, attribution settings.
-- Audiences. Audience definitions as code: the largest schema surface in this milestone, and the one
-  most worth reviewing in a pull request.
+- Audiences. **Done.** `ga4.audiences` models audiences as create/update/archive `Resource`s (GA4's
+  API has no `delete`, only `archive`). `membershipDurationDays`, `exclusionDurationMode`, and
+  `filterClauses` are immutable once created; `plan` fails loudly, naming the field, rather than
+  silently no-op-ing or letting GA4's own error surface unexplained. The filter expression tree
+  (`and`/`or`/`not`/`dimensionOrMetric`/`event`, recursive; `sequenceFilter` not implemented) is
+  normalized at validation time into the shape GA4 actually requires: confirmed live 2026-08-29 that
+  the top-level expression must be an `andGroup` whose direct children are each an `orGroup`, so a
+  config author can write a single bare condition and never see that requirement. Also confirmed
+  live: `sessionCount`/`eventCount` aren't valid audience filter fields even though they're valid
+  GA4 dimensions/metrics elsewhere, and an archived audience drops out of `list()` entirely, so no
+  extra archived-filtering logic was needed beyond the existing `archivable` handling.
 - Event create and modify rules. Server-side event rewriting, currently invisible to anyone reading
   the site's code.
 - Calculated metrics and channel groups.

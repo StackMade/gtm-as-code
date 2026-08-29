@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildPlanJson, buildPlanMarkdown, planJsonWithBuiltIns, planMarkdownWithBuiltIns, type PlanResult } from './plan.js';
+import { buildPlanJson, buildPlanMarkdown, planJsonWithBuiltIns, planMarkdownWithBuiltIns, checkAudienceImmutableFields, type PlanResult } from './plan.js';
 import type { Change } from '../../core/resource.js';
 import type { Ga4SettingsDiff } from '../../providers/google/ga4/settings.js';
 
@@ -19,6 +19,34 @@ const deleteDimension: Change = {
   operation: 'delete',
   resource: { id: 'lead_type', type: 'ga4.dimension', provider: 'google', desiredState: {} },
 };
+
+test('checkAudienceImmutableFields is a no-op when only displayName/description-equivalent fields change', () => {
+  const change: Change = {
+    operation: 'update',
+    before: { id: 'a', type: 'ga4.audience', provider: 'google', desiredState: { description: 'old', membershipDurationDays: 30, filterClauses: [1] } },
+    after: { id: 'a', type: 'ga4.audience', provider: 'google', desiredState: { description: 'new', membershipDurationDays: 30, filterClauses: [1] } },
+  };
+  assert.doesNotThrow(() => checkAudienceImmutableFields([change]));
+});
+
+test('checkAudienceImmutableFields throws naming the field when filterClauses changes on an existing audience', () => {
+  const change: Change = {
+    operation: 'update',
+    before: { id: 'a', type: 'ga4.audience', provider: 'google', desiredState: { membershipDurationDays: 30, filterClauses: [1] } },
+    after: { id: 'a', type: 'ga4.audience', provider: 'google', desiredState: { membershipDurationDays: 30, filterClauses: [2] } },
+  };
+  assert.throws(() => checkAudienceImmutableFields([change]), /ga4\.audiences\.a changes filterClauses/);
+});
+
+test('checkAudienceImmutableFields ignores create/delete and non-audience updates', () => {
+  const audienceCreate: Change = { operation: 'create', resource: { id: 'a', type: 'ga4.audience', provider: 'google', desiredState: {} } };
+  const dimensionUpdate: Change = {
+    operation: 'update',
+    before: { id: 'd', type: 'ga4.dimension', provider: 'google', desiredState: { scope: 'event', parameter: 'x' } },
+    after: { id: 'd', type: 'ga4.dimension', provider: 'google', desiredState: { scope: 'user', parameter: 'x' } },
+  };
+  assert.doesNotThrow(() => checkAudienceImmutableFields([audienceCreate, dimensionUpdate, deleteDimension]));
+});
 
 test('buildPlanJson reports hasChanges, counts, and a flat change list', () => {
   const json = buildPlanJson(resultWith([createTrigger, deleteDimension]));

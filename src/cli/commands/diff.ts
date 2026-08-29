@@ -15,6 +15,7 @@ const KIND_LABEL: Record<string, string> = {
   'ga4.dimension': 'custom dimension',
   'ga4.metric': 'custom metric',
   'ga4.keyEvent': 'key event',
+  'ga4.audience': 'audience',
 };
 
 export interface DiffResult {

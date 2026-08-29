@@ -20,6 +20,8 @@ const GA4_UPDATE_MASK: Record<Ga4Kind, string[]> = {
   dimension: ['displayName'],
   metric: ['displayName'],
   keyEvent: [],
+  /** `membershipDurationDays`/`exclusionDurationMode`/`filterClauses` are immutable — `plan` refuses to reach here if they changed. */
+  audience: ['displayName', 'description'],
 };
 
 export async function apply(opts: GlobalOptions): Promise<void> {

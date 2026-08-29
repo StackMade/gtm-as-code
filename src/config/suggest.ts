@@ -15,7 +15,7 @@ function levenshtein(a: string, b: string): number {
 /** Nearest candidate to `target` within `maxDistance` edits — used for "Did you mean" hints. */
 export function closestMatch(
   target: string,
-  candidates: string[],
+  candidates: readonly string[],
   maxDistance = 2,
 ): string | undefined {
   let best: { name: string; distance: number } | undefined;

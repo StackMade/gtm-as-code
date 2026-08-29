@@ -51,7 +51,7 @@ test('parseResourceArg rejects an empty id', () => {
 });
 
 function countsWith(overrides: Partial<FoundCounts> = {}): FoundCounts {
-  return { folders: 0, variables: 0, triggers: 0, tags: 0, dimensions: 0, metrics: 0, keyEvents: 0, skipped: 0, ...overrides };
+  return { folders: 0, variables: 0, triggers: 0, tags: 0, dimensions: 0, metrics: 0, keyEvents: 0, audiences: 0, skipped: 0, ...overrides };
 }
 
 test('buildFoundSummary reports one line per kind in PRD order', () => {
@@ -66,6 +66,7 @@ test('buildFoundSummary reports one line per kind in PRD order', () => {
     '  7 custom dimensions',
     '  0 custom metrics',
     '  3 key events',
+    '  0 audiences',
   ]);
 });
 
@@ -84,7 +85,7 @@ function baseConfig(): Record<string, unknown> {
     },
     events: {},
     gtm: { variables: {}, triggers: { existing_trigger: { type: 'customEvent', eventName: 'x' } }, tags: {} },
-    ga4: { dimensions: {}, metrics: {}, keyEvents: {} },
+    ga4: { dimensions: {}, metrics: {}, keyEvents: {}, audiences: {} },
   };
 }
 

@@ -22,10 +22,10 @@ export interface PullOptions extends GlobalOptions {
   fromExport?: string;
 }
 
-export type PullKind = 'folder' | 'variable' | 'trigger' | 'tag' | 'dimension' | 'metric' | 'keyEvent';
+export type PullKind = 'folder' | 'variable' | 'trigger' | 'tag' | 'dimension' | 'metric' | 'keyEvent' | 'audience';
 
 const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
-const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent'];
+const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent', 'audience'];
 
 /** Where a pulled resource of each kind lands in `AnalyticsConfig`. */
 const BUCKET: Record<PullKind, [top: 'gtm' | 'ga4', field: string]> = {
@@ -36,6 +36,7 @@ const BUCKET: Record<PullKind, [top: 'gtm' | 'ga4', field: string]> = {
   dimension: ['ga4', 'dimensions'],
   metric: ['ga4', 'metrics'],
   keyEvent: ['ga4', 'keyEvents'],
+  audience: ['ga4', 'audiences'],
 };
 
 const KIND_LABEL: Record<PullKind, string> = {
@@ -46,6 +47,7 @@ const KIND_LABEL: Record<PullKind, string> = {
   dimension: 'custom dimensions',
   metric: 'custom metrics',
   keyEvent: 'key events',
+  audience: 'audiences',
 };
 
 export async function pull(opts: PullOptions): Promise<void> {
@@ -89,7 +91,7 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
     skipped: number;
   };
 
-  const existingGa4 = (raw.ga4 ?? { dimensions: {}, metrics: {}, keyEvents: {} }) as Record<string, unknown>;
+  const existingGa4 = (raw.ga4 ?? { dimensions: {}, metrics: {}, keyEvents: {}, audiences: {} }) as Record<string, unknown>;
   const nextConfig = {
     ...raw,
     gtm: { folders: resources.folders, variables: resources.variables, triggers: resources.triggers, tags: resources.tags },
@@ -107,6 +109,7 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
     dimensions: 0,
     metrics: 0,
     keyEvents: 0,
+    audiences: 0,
     skipped: resources.skipped,
   };
   console.log(buildFoundSummary(counts).join('\n'));
@@ -136,7 +139,12 @@ async function pullAll(opts: PullOptions): Promise<void> {
   const nextConfig = {
     ...raw,
     gtm: { folders: gtmResources.folder, variables: gtmResources.variable, triggers: gtmResources.trigger, tags: gtmResources.tag },
-    ga4: { dimensions: ga4Resources.dimension, metrics: ga4Resources.metric, keyEvents: ga4Resources.keyEvent },
+    ga4: {
+      dimensions: ga4Resources.dimension,
+      metrics: ga4Resources.metric,
+      keyEvents: ga4Resources.keyEvent,
+      audiences: ga4Resources.audience,
+    },
   };
 
   mkdirSync(dirname(outPath), { recursive: true });
@@ -206,6 +214,7 @@ interface PulledGa4 {
   dimension: Record<string, Record<string, unknown>>;
   metric: Record<string, Record<string, unknown>>;
   keyEvent: Record<string, Record<string, unknown>>;
+  audience: Record<string, Record<string, unknown>>;
 }
 
 export interface FoundCounts {
@@ -216,6 +225,7 @@ export interface FoundCounts {
   dimensions: number;
   metrics: number;
   keyEvents: number;
+  audiences: number;
   /** GTM objects with no reverse mapping (e.g. built-in types this tool doesn't manage) — found but not written. */
   skipped: number;
 }
@@ -253,11 +263,12 @@ async function pullAllResources(
     tag: tagMap.resources,
   };
 
-  const [dimensions, metrics, keyEvents] = await Promise.all(GA4_KINDS.map((kind) => ga4.listResources(kind)));
+  const [dimensions, metrics, keyEvents, audiences] = await Promise.all(GA4_KINDS.map((kind) => ga4.listResources(kind)));
   const ga4Resources: PulledGa4 = {
     dimension: toGa4Map('dimension', dimensions),
     metric: toGa4Map('metric', metrics),
     keyEvent: toGa4Map('keyEvent', keyEvents),
+    audience: toGa4Map('audience', audiences),
   };
 
   // "Found" counts the raw remote objects GTM returned, not just the ones this tool knows
@@ -270,6 +281,7 @@ async function pullAllResources(
     dimensions: Object.keys(ga4Resources.dimension).length,
     metrics: Object.keys(ga4Resources.metric).length,
     keyEvents: Object.keys(ga4Resources.keyEvent).length,
+    audiences: Object.keys(ga4Resources.audience).length,
     skipped: folderMap.skipped + variableMap.skipped + triggerMap.skipped + tagMap.skipped,
   };
 
@@ -361,6 +373,7 @@ export function buildFoundSummary(counts: FoundCounts): string[] {
     `  ${counts.dimensions} custom dimensions`,
     `  ${counts.metrics} custom metrics`,
     `  ${counts.keyEvents} key events`,
+    `  ${counts.audiences} audiences`,
   ];
   if (counts.skipped > 0) {
     lines.push('', `  ${counts.skipped} skipped (no reverse mapping for this GTM object type)`);
