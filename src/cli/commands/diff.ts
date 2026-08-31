@@ -20,6 +20,7 @@ const KIND_LABEL: Record<string, string> = {
   'ga4.eventEditRule': 'event edit rule',
   'ga4.calculatedMetric': 'calculated metric',
   'ga4.channelGroup': 'channel group',
+  'ga4.measurementProtocolSecret': 'measurement protocol secret',
 };
 
 export interface DiffResult {
@@ -90,7 +91,8 @@ function resourceOf(change: Change): Resource {
 function printLine(symbol: string, action: string, change: Change): void {
   const resource = resourceOf(change);
   const kind = KIND_LABEL[resource.type] ?? resource.type;
-  console.log(`${symbol} ${action} ${kind}`.padEnd(20) + resource.id);
+  const label = `${symbol} ${action} ${kind}`;
+  console.log((label.length >= 20 ? `${label} ` : label.padEnd(20)) + resource.id);
 }
 
 function printFieldDiff(before: unknown, after: unknown): void {

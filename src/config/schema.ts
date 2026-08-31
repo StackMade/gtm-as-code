@@ -229,6 +229,8 @@ export interface AnalyticsConfig {
     eventEditRules: Record<string, EventEditRuleDef>;
     calculatedMetrics: Record<string, CalculatedMetricDef>;
     channelGroups: Record<string, ChannelGroupDef>;
+    /** Stream-scoped, like `eventCreateRules`/`eventEditRules` — requires `streamWebsiteUrl`. */
+    measurementProtocolSecrets: Record<string, unknown>;
   };
 }
 
@@ -254,6 +256,7 @@ const GA4_TOP_LEVEL_KEYS = [
   'eventEditRules',
   'calculatedMetrics',
   'channelGroups',
+  'measurementProtocolSecrets',
 ];
 /** `RETENTION_DURATION_UNSPECIFIED` is not a settable value, so it's excluded here. */
 const RETENTION_DURATIONS = ['TWO_MONTHS', 'FOURTEEN_MONTHS', 'TWENTY_SIX_MONTHS', 'THIRTY_EIGHT_MONTHS', 'FIFTY_MONTHS'] as const;
@@ -592,9 +595,13 @@ function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4']
 
   const eventCreateRules = validateEventCreateRules(parsed, container.eventCreateRules ?? {}, ['ga4', 'eventCreateRules']);
   const eventEditRules = validateEventEditRules(parsed, container.eventEditRules ?? {}, ['ga4', 'eventEditRules']);
-  if ((Object.keys(eventCreateRules).length > 0 || Object.keys(eventEditRules).length > 0) && streamWebsiteUrl === undefined) {
+  const measurementProtocolSecrets = requireObject(parsed, container.measurementProtocolSecrets ?? {}, ['ga4', 'measurementProtocolSecrets']);
+  if (
+    (Object.keys(eventCreateRules).length > 0 || Object.keys(eventEditRules).length > 0 || Object.keys(measurementProtocolSecrets).length > 0) &&
+    streamWebsiteUrl === undefined
+  ) {
     fail(parsed, ['ga4', 'streamWebsiteUrl'], [
-      { label: 'Expected', value: '`ga4.streamWebsiteUrl` set (event create/edit rules are stream-scoped)' },
+      { label: 'Expected', value: '`ga4.streamWebsiteUrl` set (event create/edit rules and measurement protocol secrets are stream-scoped)' },
       { label: 'Received', value: 'no `ga4.streamWebsiteUrl`' },
     ]);
   }
@@ -612,6 +619,7 @@ function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4']
     eventEditRules,
     calculatedMetrics: validateCalculatedMetrics(parsed, container.calculatedMetrics ?? {}, ['ga4', 'calculatedMetrics']),
     channelGroups: validateChannelGroups(parsed, container.channelGroups ?? {}, ['ga4', 'channelGroups']),
+    measurementProtocolSecrets,
   };
 }
 

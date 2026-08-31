@@ -67,6 +67,20 @@ const KINDS = {
     createIdParam: 'calculatedMetricId',
   },
   channelGroup: { collection: 'channelGroups', field: 'channelGroups', type: 'ga4.channelGroup', archivable: false, v1alpha: true, scope: 'property' },
+  /**
+   * Nested under a data stream, like event create/edit rules, but lives on `v1beta` (confirmed live
+   * 2026-08-30: `GET .../measurementProtocolSecrets` returns 200 on both versions; `v1beta` is used
+   * for parity with `dataStreams` itself). Real DELETE, no archive. `secretValue` is server-generated
+   * and output-only — this tool never sends it and never diffs it.
+   */
+  measurementProtocolSecret: {
+    collection: 'measurementProtocolSecrets',
+    field: 'measurementProtocolSecrets',
+    type: 'ga4.measurementProtocolSecret',
+    archivable: false,
+    v1alpha: false,
+    scope: 'stream',
+  },
 } as const;
 
 export type Ga4Kind = keyof typeof KINDS;
@@ -97,6 +111,7 @@ const RESOURCE_ID_FIELD: Record<Ga4Kind, string> = {
   eventEditRule: 'displayName',
   calculatedMetric: 'calculatedMetricId',
   channelGroup: 'displayName',
+  measurementProtocolSecret: 'displayName',
 };
 
 function resourceId(kind: Ga4Kind, object: Ga4Object): string {

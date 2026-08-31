@@ -28,6 +28,7 @@ const GA4_UPDATE_MASK: Record<Ga4Kind, string[]> = {
   /** `calculatedMetricId` is immutable and create-only, not part of any update mask. */
   calculatedMetric: ['displayName', 'metricUnit', 'formula', 'description'],
   channelGroup: ['displayName', 'description', 'groupingRule', 'primary'],
+  measurementProtocolSecret: ['displayName'],
 };
 
 export async function apply(opts: GlobalOptions): Promise<void> {
@@ -99,7 +100,7 @@ function printDestructiveWarnings(changes: Change[]): void {
 
 
 async function execute(result: PlanResult): Promise<void> {
-  const { changes, config, compiled, gtm, ga4, statePath } = result;
+  const { changes, compiled, gtm, ga4, statePath } = result;
   let state = await readState(statePath);
   const triggerGtmIds = invert(result.triggerGtmIdToLogicalId);
   const folderGtmIds = invert(result.folderGtmIdToLogicalId);
@@ -156,7 +157,7 @@ async function execute(result: PlanResult): Promise<void> {
     if (!change) continue;
     const kind = change.resource.type.split('.')[1] as GtmKind;
     const payload = toGtmPayload(kind, change.resource.id, change.resource.desiredState as Record<string, unknown>, {
-      measurementId: config.google.ga4.measurementId,
+      measurementId: result.measurementId,
       triggerGtmIds,
       folderGtmIds,
     });
@@ -186,7 +187,7 @@ async function execute(result: PlanResult): Promise<void> {
       const gtmId = result.gtmIds[`${kind}:${id}`];
       if (!gtmId) continue;
       const payload = toGtmPayload(kind, id, change.after.desiredState as Record<string, unknown>, {
-        measurementId: config.google.ga4.measurementId,
+        measurementId: result.measurementId,
         triggerGtmIds,
         folderGtmIds,
       });

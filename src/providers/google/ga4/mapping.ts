@@ -53,6 +53,10 @@ export function toGa4Payload(kind: Ga4Kind, resourceId: string, desiredState: Re
     return toChannelGroupPayload(resourceId, desiredState as unknown as ChannelGroupDef);
   }
 
+  if (kind === 'measurementProtocolSecret') {
+    return { displayName: resourceId };
+  }
+
   return {
     eventName: resourceId,
     countingMethod: String(desiredState.countingMethod ?? 'ONCE_PER_EVENT'),

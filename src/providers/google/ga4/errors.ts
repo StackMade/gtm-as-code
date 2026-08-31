@@ -16,7 +16,7 @@ export class Ga4ApiError extends Error {
 
   private static format(action: string, resourceId: string, status: string): string {
     const parts = [`Unable to ${action} "${resourceId}".`, '', 'Google API:', status];
-    const hint = REMEDIATION[status];
+    const hint = status === 'FAILED_PRECONDITION' ? FAILED_PRECONDITION_HINTS.find((h) => action.includes(h.actionContains))?.hint : REMEDIATION[status];
     if (hint) parts.push('', hint);
     return parts.join('\n');
   }
@@ -28,8 +28,21 @@ const REMEDIATION: Record<string, string> = {
   NOT_FOUND: 'The property id may be wrong, or the resource was deleted remotely.',
   ALREADY_EXISTS: 'A resource with this name already exists on the property.',
   INVALID_ARGUMENT: 'GA4 rejected one of the field values — see the Google API detail above.',
-  FAILED_PRECONDITION:
-    'A GA4 precondition this tool cannot satisfy through the API was not met. For googleSignals, ' +
-    'Google Signals must first be activated on the property through the GA4 UI (accepting its terms) ' +
-    'before its state can be changed here.',
 };
+
+/** `FAILED_PRECONDITION` covers unrelated GA4 requirements this tool can't satisfy through the
+ *  API — the hint has to be picked by what was being done, not just the status code. */
+const FAILED_PRECONDITION_HINTS: Array<{ actionContains: string; hint: string }> = [
+  {
+    actionContains: 'googleSignals',
+    hint:
+      'Google Signals must first be activated on the property through the GA4 UI (accepting its terms) ' +
+      'before its state can be changed here.',
+  },
+  {
+    actionContains: 'measurementProtocolSecret',
+    hint:
+      'The property must first have its User Data Collection Acknowledgement attested through the GA4 UI ' +
+      '(Admin → Data Settings → Data Collection) before measurement protocol secrets can be created.',
+  },
+];

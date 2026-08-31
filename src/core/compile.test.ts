@@ -12,7 +12,7 @@ function baseConfig(overrides: Partial<AnalyticsConfig>): AnalyticsConfig {
     google: { gtm: { accountId: '1', containerId: '1' }, ga4: { propertyId: '1' } },
     events: {},
     gtm: { variables: {}, triggers: {}, tags: {}, folders: {}, builtInVariables: [] },
-    ga4: { dimensions: {}, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {} },
+    ga4: { dimensions: {}, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {}, measurementProtocolSecrets: {}, },
     ...overrides,
   };
 }
@@ -100,7 +100,7 @@ test('an event explicitly waiving consent (notNeeded) compiles without throwing'
 test('more than 50 event-scoped custom dimensions (hand-written + event-derived) throws', () => {
   const dimensions: AnalyticsConfig['ga4']['dimensions'] = {};
   for (let i = 0; i < 51; i++) dimensions[`dim_${i}`] = { scope: 'event', parameter: `dim_${i}` };
-  const config = baseConfig({ ga4: { dimensions, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {} } });
+  const config = baseConfig({ ga4: { dimensions, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {}, measurementProtocolSecrets: {}, } });
 
   assert.throws(() => compileEvents(config, 'analytics.yaml'), ConfigError);
 });
@@ -108,7 +108,7 @@ test('more than 50 event-scoped custom dimensions (hand-written + event-derived)
 test('exactly 50 event-scoped custom dimensions compiles without throwing', () => {
   const dimensions: AnalyticsConfig['ga4']['dimensions'] = {};
   for (let i = 0; i < 50; i++) dimensions[`dim_${i}`] = { scope: 'event', parameter: `dim_${i}` };
-  const config = baseConfig({ ga4: { dimensions, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {} } });
+  const config = baseConfig({ ga4: { dimensions, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {}, measurementProtocolSecrets: {}, } });
 
   assert.doesNotThrow(() => compileEvents(config, 'analytics.yaml'));
 });
@@ -116,7 +116,7 @@ test('exactly 50 event-scoped custom dimensions compiles without throwing', () =
 test('user-scoped custom dimensions do not count toward the event-scoped cap', () => {
   const dimensions: AnalyticsConfig['ga4']['dimensions'] = {};
   for (let i = 0; i < 60; i++) dimensions[`dim_${i}`] = { scope: 'user', parameter: `dim_${i}` };
-  const config = baseConfig({ ga4: { dimensions, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {} } });
+  const config = baseConfig({ ga4: { dimensions, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {}, measurementProtocolSecrets: {}, } });
 
   assert.doesNotThrow(() => compileEvents(config, 'analytics.yaml'));
 });
@@ -126,7 +126,7 @@ test('derived id colliding with an unrelated explicit resource in another sectio
     events: {
       generate_lead: { parameters: {} },
     },
-    ga4: { dimensions: { generate_lead: { scope: 'event', parameter: 'unrelated' } }, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {} },
+    ga4: { dimensions: { generate_lead: { scope: 'event', parameter: 'unrelated' } }, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {}, measurementProtocolSecrets: {}, },
   });
 
   assert.throws(() => compileEvents(config, 'analytics.yaml'), ConfigError);

@@ -202,7 +202,7 @@ google:
 
   ga4:
     propertyId: string
-    measurementId: string      # optional
+    measurementId: string      # optional, derived from ga4.streamWebsiteUrl's web stream if unset
 
 events:
   <event_name>:
@@ -321,6 +321,11 @@ ga4:
             not: <filter>
             filter: { fieldName: string, string: { matchType: string, value: string } |
               inList: { values: [string] } }
+  measurementProtocolSecrets:
+    <name>: {}  # <name> is the secret's displayName; secretValue is server-generated, never in config
+    # requires streamWebsiteUrl to be set; requires the property's User Data Collection
+    # Acknowledgement to already be attested through the GA4 UI (Admin -> Data Settings -> Data
+    # Collection). This tool can only create the secret after that, not attest it.
 ```
 
 Only `type` (and, for tags, `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`) is
@@ -396,6 +401,28 @@ pre-existing "Default channel group"; this tool doesn't validate `fieldName` aga
 wrong value surfaces as GA4's own error on apply. Both kinds support a real `DELETE`, no archive
 step; deleting the property's system-defined "Default channel group" isn't possible through the API
 regardless.
+
+`google.ga4.measurementId` no longer has to be set by hand. When it's absent, `plan`/`apply`/`drift`
+derive it from `ga4.streamWebsiteUrl`'s resolved web stream (its `webStreamData.measurementId`), the
+same lookup `enhancedMeasurement`/event create-edit rules already do. An explicit
+`google.ga4.measurementId` still wins if both are present. `gtm-code diff` and other offline commands
+(`validate`, `docs`, `generate`) never derive it, since they have no network access, so a `ga4Event`/
+`googleTag` tag compiled there has no `measurementId` unless one is set explicitly in config.
+
+`ga4.measurementProtocolSecrets` are stream-scoped create/update/delete `Resource`s (`v1beta`,
+confirmed live 2026-08-30, unlike event create/edit rules which are `v1alpha`), so require
+`streamWebsiteUrl` like they do. A secret's config key is its `displayName`; `secretValue` is
+server-generated and output-only, so it's never read from or written to config, and this tool never
+logs it. Creating one has a real precondition this tool can't satisfy through the API: the property's
+User Data Collection Acknowledgement must first be attested through the GA4 UI (Admin -> Data
+Settings -> Data Collection), confirmed live. `apply` surfaces GA4's `FAILED_PRECONDITION` with that
+remediation hint rather than a bare status code.
+
+GA4's Admin API refuses to create `ANDROID_APP_DATA_STREAM`/`IOS_APP_DATA_STREAM` data streams
+outright (confirmed live 2026-08-30: `INVALID_ARGUMENT`, "To create app streams, use the Firebase
+API"). This is a hard API boundary, not a gap in this tool, so `ga4.dataStreams` as a managed
+resource isn't implemented. Existing app streams (created through Firebase) aren't read by `pull`
+either; only web streams are touched, via `streamWebsiteUrl`.
 
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),

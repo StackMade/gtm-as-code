@@ -27,9 +27,10 @@ const GA4_KINDS: Ga4Kind[] = [
   'eventEditRule',
   'calculatedMetric',
   'channelGroup',
+  'measurementProtocolSecret',
 ];
 /** Stream-scoped GA4 kinds need a resolved data stream `name` passed to `listManaged`. */
-const GA4_STREAM_SCOPED_KINDS: ReadonlySet<Ga4Kind> = new Set(['eventCreateRule', 'eventEditRule']);
+const GA4_STREAM_SCOPED_KINDS: ReadonlySet<Ga4Kind> = new Set(['eventCreateRule', 'eventEditRule', 'measurementProtocolSecret']);
 
 const KIND_LABEL: Record<string, string> = {
   'gtm.folder': 'folder',
@@ -44,6 +45,7 @@ const KIND_LABEL: Record<string, string> = {
   'ga4.eventEditRule': 'event edit rule',
   'ga4.calculatedMetric': 'calculated metric',
   'ga4.channelGroup': 'channel group',
+  'ga4.measurementProtocolSecret': 'measurement protocol secret',
 };
 
 export interface PlanResult {
@@ -64,6 +66,8 @@ export interface PlanResult {
   builtInVariablesToEnable: string[];
   /** GA4 property/stream settings (retention, Google Signals, enhanced measurement) that differ from live state. */
   ga4Settings: Ga4SettingsDiff;
+  /** `google.ga4.measurementId` if set, else derived from the resolved web stream (PRD gap closed 2026-08-30). */
+  measurementId: string | undefined;
 }
 
 /** Read-only by design: `*Readonly` scopes and `listManaged` only, never create/update/delete. */
@@ -85,9 +89,15 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
   const parsed = loadConfig(opts.config);
   const interpolated = { ...parsed, data: interpolateConfig(parsed) };
   const config = validateConfig(interpolated);
-  const compiled = compileEvents(config, parsed.file);
 
   const auth = await authorize(scopes);
+  const ga4 = new Ga4Client(auth, config.google.ga4.propertyId);
+
+  // Resolved once, up front: `compileEvents` needs the stream's `measurementId` when config doesn't
+  // declare one, and `diffGa4Settings`/stream-scoped `listManaged` calls below reuse the same lookup.
+  const resolvedStream = config.ga4.streamWebsiteUrl ? await resolveGa4Stream(ga4, config.ga4.streamWebsiteUrl) : undefined;
+  const derivedMeasurementId = config.google.ga4.measurementId ?? resolvedStream?.webStreamData?.measurementId;
+  const compiled = compileEvents(config, parsed.file, { measurementId: derivedMeasurementId });
 
   const workspaceId = await resolveWorkspaceId(
     auth,
@@ -96,7 +106,6 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     config.google.gtm.workspace,
   );
   const gtm = new GtmClient(auth, { accountId: config.google.gtm.accountId, containerId: config.google.gtm.containerId, workspaceId });
-  const ga4 = new Ga4Client(auth, config.google.ga4.propertyId);
   const statePath = join(process.cwd(), '.analytics', 'state.json');
   const state = await readState(statePath);
 
@@ -115,10 +124,6 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     const gtmId = (resource.desiredState as GtmObject).triggerId;
     if (typeof gtmId === 'string') triggerGtmIdToLogicalId[gtmId] = resource.id;
   }
-
-  // Event create/edit rules are stream-scoped, so the stream must be resolved before `listManaged`
-  // can query them; resolving it here also lets `diffGa4Settings` skip its own lookup below.
-  const resolvedStream = config.ga4.streamWebsiteUrl ? await resolveGa4Stream(ga4, config.ga4.streamWebsiteUrl) : undefined;
 
   // Folders and triggers had to be read first — reverse mapping needs them — but nothing
   // below depends on anything else here, so the remaining listings go out together.
@@ -185,6 +190,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     folderGtmIdToLogicalId,
     builtInVariablesToEnable,
     ga4Settings,
+    measurementId: derivedMeasurementId,
   };
 }
 
@@ -352,7 +358,7 @@ function printLine(symbol: string, action: string, change: Change, showAction: b
   const resource = resourceOf(change);
   const kind = KIND_LABEL[resource.type] ?? resource.type;
   const label = showAction ? `${symbol} ${action} ${kind}` : `${symbol} ${kind}`;
-  console.log(label.padEnd(20) + resource.id);
+  console.log((label.length >= 20 ? `${label} ` : label.padEnd(20)) + resource.id);
 }
 
 function printFieldDiff(before: unknown, after: unknown): void {

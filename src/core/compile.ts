@@ -8,7 +8,12 @@ import type { Resource } from './resource.js';
  * the derived one — that is the escape hatch. A collision across *different*
  * sections has no such reading and is rejected.
  */
-export function compileEvents(config: AnalyticsConfig, file: string): AnalyticsConfig {
+export function compileEvents(
+  config: AnalyticsConfig,
+  file: string,
+  overrides: { measurementId?: string } = {},
+): AnalyticsConfig {
+  const measurementId = overrides.measurementId ?? config.google.ga4.measurementId;
   const usedIds = new Map<string, string>();
   const record = (id: string, where: string): void => {
     usedIds.set(id, where);
@@ -73,7 +78,7 @@ export function compileEvents(config: AnalyticsConfig, file: string): AnalyticsC
         trigger: [eventId],
         parameters: tagParameters,
         consent: event.consent,
-        ...(config.google.ga4.measurementId ? { measurementId: config.google.ga4.measurementId } : {}),
+        ...(measurementId ? { measurementId } : {}),
       };
     }
 
@@ -132,6 +137,7 @@ export function toResources(config: AnalyticsConfig): Resource[] {
   for (const [id, def] of Object.entries(config.ga4.eventEditRules)) push(id, 'ga4.eventEditRule', def);
   for (const [id, def] of Object.entries(config.ga4.calculatedMetrics)) push(id, 'ga4.calculatedMetric', def);
   for (const [id, def] of Object.entries(config.ga4.channelGroups)) push(id, 'ga4.channelGroup', def);
+  for (const [id, def] of Object.entries(config.ga4.measurementProtocolSecrets)) push(id, 'ga4.measurementProtocolSecret', def);
 
   return resources;
 }

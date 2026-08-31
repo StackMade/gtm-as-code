@@ -64,6 +64,7 @@ function countsWith(overrides: Partial<FoundCounts> = {}): FoundCounts {
     eventEditRules: 0,
     calculatedMetrics: 0,
     channelGroups: 0,
+    measurementProtocolSecrets: 0,
     skipped: 0,
     ...overrides,
   };
@@ -86,6 +87,7 @@ test('buildFoundSummary reports one line per kind in PRD order', () => {
     '  0 event edit rules',
     '  0 calculated metrics',
     '  0 channel groups',
+    '  0 measurement protocol secrets',
   ]);
 });
 

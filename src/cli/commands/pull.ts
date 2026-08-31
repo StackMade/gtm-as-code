@@ -34,7 +34,8 @@ export type PullKind =
   | 'eventCreateRule'
   | 'eventEditRule'
   | 'calculatedMetric'
-  | 'channelGroup';
+  | 'channelGroup'
+  | 'measurementProtocolSecret';
 
 const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
 const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent', 'audience', 'calculatedMetric', 'channelGroup'];
@@ -53,6 +54,7 @@ const BUCKET: Record<PullKind, [top: 'gtm' | 'ga4', field: string]> = {
   eventEditRule: ['ga4', 'eventEditRules'],
   calculatedMetric: ['ga4', 'calculatedMetrics'],
   channelGroup: ['ga4', 'channelGroups'],
+  measurementProtocolSecret: ['ga4', 'measurementProtocolSecrets'],
 };
 
 const KIND_LABEL: Record<PullKind, string> = {
@@ -68,6 +70,7 @@ const KIND_LABEL: Record<PullKind, string> = {
   eventEditRule: 'event edit rules',
   calculatedMetric: 'calculated metrics',
   channelGroup: 'channel groups',
+  measurementProtocolSecret: 'measurement protocol secrets',
 };
 
 export async function pull(opts: PullOptions): Promise<void> {
@@ -120,6 +123,7 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
     eventEditRules: {},
     calculatedMetrics: {},
     channelGroups: {},
+    measurementProtocolSecrets: {},
   }) as Record<string, unknown>;
   const nextConfig = {
     ...raw,
@@ -143,6 +147,7 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
     eventEditRules: 0,
     calculatedMetrics: 0,
     channelGroups: 0,
+    measurementProtocolSecrets: 0,
     skipped: resources.skipped,
   };
   console.log(buildFoundSummary(counts).join('\n'));
@@ -181,6 +186,7 @@ async function pullAll(opts: PullOptions): Promise<void> {
       eventEditRules: ga4Resources.eventEditRule,
       calculatedMetrics: ga4Resources.calculatedMetric,
       channelGroups: ga4Resources.channelGroup,
+      measurementProtocolSecrets: ga4Resources.measurementProtocolSecret,
       ...(config.ga4.streamWebsiteUrl ? { streamWebsiteUrl: config.ga4.streamWebsiteUrl } : {}),
     },
   };
@@ -257,6 +263,7 @@ interface PulledGa4 {
   eventEditRule: Record<string, Record<string, unknown>>;
   calculatedMetric: Record<string, Record<string, unknown>>;
   channelGroup: Record<string, Record<string, unknown>>;
+  measurementProtocolSecret: Record<string, Record<string, unknown>>;
 }
 
 export interface FoundCounts {
@@ -272,6 +279,7 @@ export interface FoundCounts {
   eventEditRules: number;
   calculatedMetrics: number;
   channelGroups: number;
+  measurementProtocolSecrets: number;
   /** GTM objects with no reverse mapping (e.g. built-in types this tool doesn't manage) — found but not written. */
   skipped: number;
 }
@@ -313,20 +321,24 @@ async function pullAllResources(
     GA4_KINDS.map((kind) => ga4.listResources(kind)),
   );
 
-  // Event create/edit rules are stream-scoped; pull has no config-declared stream to work from,
-  // so it only pulls them when the property has exactly one web data stream to resolve to.
-  // Multiple streams would need picking one, which isn't a decision pull can make silently.
+  // Event create/edit rules and measurement protocol secrets are stream-scoped; pull has no
+  // config-declared stream to work from, so it only pulls them when the property has exactly one
+  // web data stream to resolve to. Multiple streams would need picking one, which isn't a decision
+  // pull can make silently.
   const dataStreams = await ga4.listDataStreams();
   const webStreams = dataStreams.filter((s) => s.type === 'WEB_DATA_STREAM');
-  const [eventCreateRules, eventEditRules] =
+  const [eventCreateRules, eventEditRules, measurementProtocolSecrets] =
     webStreams.length === 1
       ? await Promise.all([
           ga4.listResources('eventCreateRule', webStreams[0].name),
           ga4.listResources('eventEditRule', webStreams[0].name),
+          ga4.listResources('measurementProtocolSecret', webStreams[0].name),
         ])
-      : [[], []];
+      : [[], [], []];
   if (webStreams.length > 1) {
-    console.log(`Skipping event create/edit rules: ${webStreams.length} web data streams found, pull only supports a single stream.`);
+    console.log(
+      `Skipping event create/edit rules and measurement protocol secrets: ${webStreams.length} web data streams found, pull only supports a single stream.`,
+    );
   }
 
   const ga4Resources: PulledGa4 = {
@@ -338,6 +350,7 @@ async function pullAllResources(
     eventEditRule: toGa4Map('eventEditRule', eventEditRules),
     calculatedMetric: toGa4Map('calculatedMetric', calculatedMetrics),
     channelGroup: toGa4Map('channelGroup', channelGroups),
+    measurementProtocolSecret: toGa4Map('measurementProtocolSecret', measurementProtocolSecrets),
   };
 
   // "Found" counts the raw remote objects GTM returned, not just the ones this tool knows
@@ -355,6 +368,7 @@ async function pullAllResources(
     eventEditRules: Object.keys(ga4Resources.eventEditRule).length,
     calculatedMetrics: Object.keys(ga4Resources.calculatedMetric).length,
     channelGroups: Object.keys(ga4Resources.channelGroup).length,
+    measurementProtocolSecrets: Object.keys(ga4Resources.measurementProtocolSecret).length,
     skipped: folderMap.skipped + variableMap.skipped + triggerMap.skipped + tagMap.skipped,
   };
 
@@ -451,6 +465,7 @@ export function buildFoundSummary(counts: FoundCounts): string[] {
     `  ${counts.eventEditRules} event edit rules`,
     `  ${counts.calculatedMetrics} calculated metrics`,
     `  ${counts.channelGroups} channel groups`,
+    `  ${counts.measurementProtocolSecrets} measurement protocol secrets`,
   ];
   if (counts.skipped > 0) {
     lines.push('', `  ${counts.skipped} skipped (no reverse mapping for this GTM object type)`);

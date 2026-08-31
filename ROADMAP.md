@@ -281,9 +281,16 @@ GA4 hardening is a hard prerequisite for all of it.
   videoEngagementEnabled, fileDownloadsEnabled, formInteractionsEnabled}` diffs against the stream's
   live `enhancedMeasurementSettings` and applies via `plan`/`apply`, following the settings-diff
   model below rather than the create/update/delete `Resource` model, since a stream's enhanced
-  measurement flags have no lifecycle of their own. Still open: iOS/Android streams, and measurement
-  protocol secrets. Creating streams and deriving `google.ga4.measurementId` from one, so it no
-  longer needs pasting into both config and the GTM Google tag by hand, is also still open.
+  measurement flags have no lifecycle of their own. `ga4.measurementProtocolSecrets` models secrets
+  as stream-scoped create/update/delete `Resource`s (confirmed live 2026-08-30: `v1beta`, unlike
+  event create/edit rules). Creating one has a real GA4 precondition this tool can't satisfy through
+  the API (the property's User Data Collection Acknowledgement must be attested through the UI
+  first), surfaced as a remediation hint on `FAILED_PRECONDITION` rather than a bare status code.
+  `google.ga4.measurementId` is now derived from `streamWebsiteUrl`'s resolved web stream when not
+  set explicitly, closing the gap that needed pasting it into config by hand. iOS/Android streams
+  are **blocked**, not open: the GA4 Admin API refuses to create `ANDROID_APP_DATA_STREAM`/
+  `IOS_APP_DATA_STREAM` outright (confirmed live 2026-08-30, "To create app streams, use the
+  Firebase API"), so `ga4.dataStreams` as a managed resource isn't implementable through this API.
 - Property settings. **Partially done.** `ga4.dataRetention` and `ga4.googleSignals` diff against
   the property's live `dataRetentionSettings`/`googleSignalsSettings` and apply via `plan`/`apply`.
   Both are property-level settings with no create/delete lifecycle, so they're diffed directly
