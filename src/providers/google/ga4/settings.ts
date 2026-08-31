@@ -6,6 +6,7 @@ export interface Ga4SettingsDiff {
   streamName?: string;
   dataRetention?: { patch: { eventDataRetention: string }; updateMask: string[] };
   googleSignals?: { patch: { state: string }; updateMask: string[] };
+  attributionSettings?: { patch: Record<string, string>; updateMask: string[] };
   enhancedMeasurement?: { patch: Record<string, boolean>; updateMask: string[] };
 }
 
@@ -48,6 +49,19 @@ export async function diffGa4Settings(
     }
   }
 
+  if (config.attributionSettings) {
+    const current = (await ga4.getAttributionSettings()) as unknown as Record<string, string>;
+    const patch: Record<string, string> = {};
+    const updateMask: string[] = [];
+    for (const [key, value] of Object.entries(config.attributionSettings)) {
+      if (current[key] !== value) {
+        patch[key] = value;
+        updateMask.push(key);
+      }
+    }
+    if (updateMask.length > 0) result.attributionSettings = { patch, updateMask };
+  }
+
   if (config.streamWebsiteUrl) {
     const stream = resolvedStream ?? (await resolveGa4Stream(ga4, config.streamWebsiteUrl));
     result.streamName = stream.name;
@@ -70,5 +84,10 @@ export async function diffGa4Settings(
 }
 
 export function hasGa4SettingsChanges(diff: Ga4SettingsDiff): boolean {
-  return diff.dataRetention !== undefined || diff.googleSignals !== undefined || diff.enhancedMeasurement !== undefined;
+  return (
+    diff.dataRetention !== undefined ||
+    diff.googleSignals !== undefined ||
+    diff.attributionSettings !== undefined ||
+    diff.enhancedMeasurement !== undefined
+  );
 }

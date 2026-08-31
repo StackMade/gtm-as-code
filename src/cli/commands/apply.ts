@@ -115,6 +115,9 @@ async function execute(result: PlanResult): Promise<void> {
   if (ga4Settings.googleSignals) {
     await ga4.updateGoogleSignalsSettings(ga4Settings.googleSignals.patch, ga4Settings.googleSignals.updateMask);
   }
+  if (ga4Settings.attributionSettings) {
+    await ga4.updateAttributionSettings(ga4Settings.attributionSettings.patch, ga4Settings.attributionSettings.updateMask);
+  }
   if (ga4Settings.enhancedMeasurement && ga4Settings.streamName) {
     await ga4.updateEnhancedMeasurementSettings(
       ga4Settings.streamName,

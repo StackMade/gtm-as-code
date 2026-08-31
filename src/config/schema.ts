@@ -68,6 +68,17 @@ export interface EnhancedMeasurementDef {
   formInteractionsEnabled?: boolean;
 }
 
+/**
+ * `adsWebConversionDataExportScope` is deliberately excluded: it's an Ads-linking concept, not
+ * shown on GA4's Attribution settings UI page, and confirmed live (2026-08-31) to reject being
+ * set back to its own current value (`400 INVALID_ARGUMENT`), unlike the three fields here.
+ */
+export interface AttributionSettingsDef {
+  reportingAttributionModel?: string;
+  acquisitionConversionEventLookbackWindow?: string;
+  otherConversionEventLookbackWindow?: string;
+}
+
 export interface AudienceEventTriggerDef {
   eventName: string;
   logCondition: string;
@@ -222,6 +233,7 @@ export interface AnalyticsConfig {
     streamWebsiteUrl?: string;
     dataRetention?: string;
     googleSignals?: string;
+    attributionSettings?: AttributionSettingsDef;
     enhancedMeasurement?: EnhancedMeasurementDef;
     audiences: Record<string, AudienceDef>;
     /** Stream-scoped, like `enhancedMeasurement` — both require `streamWebsiteUrl`. */
@@ -250,6 +262,7 @@ const GA4_TOP_LEVEL_KEYS = [
   'streamWebsiteUrl',
   'dataRetention',
   'googleSignals',
+  'attributionSettings',
   'enhancedMeasurement',
   'audiences',
   'eventCreateRules',
@@ -262,6 +275,12 @@ const GA4_TOP_LEVEL_KEYS = [
 const RETENTION_DURATIONS = ['TWO_MONTHS', 'FOURTEEN_MONTHS', 'TWENTY_SIX_MONTHS', 'THIRTY_EIGHT_MONTHS', 'FIFTY_MONTHS'] as const;
 /** `GOOGLE_SIGNALS_STATE_UNSPECIFIED` is not a settable value; `*_CONSENT_*` values are output-only. */
 const GOOGLE_SIGNALS_STATES = ['GOOGLE_SIGNALS_ENABLED', 'GOOGLE_SIGNALS_DISABLED'] as const;
+/**
+ * Only the current values were confirmed live (2026-08-31); the full enum sets weren't, so these
+ * are validated as plain strings and passed through, like `measurementProtocolSecrets.displayName`,
+ * rather than `requireEnum`'d against a guessed list.
+ */
+const ATTRIBUTION_SETTINGS_KEYS = ['reportingAttributionModel', 'acquisitionConversionEventLookbackWindow', 'otherConversionEventLookbackWindow'];
 const ENHANCED_MEASUREMENT_KEYS = [
   'scrollsEnabled',
   'outboundClicksEnabled',
@@ -582,6 +601,10 @@ function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4']
     container.googleSignals !== undefined
       ? requireEnum(parsed, container.googleSignals, GOOGLE_SIGNALS_STATES, ['ga4', 'googleSignals'])
       : undefined;
+  const attributionSettings =
+    container.attributionSettings !== undefined
+      ? validateAttributionSettings(parsed, container.attributionSettings, ['ga4', 'attributionSettings'])
+      : undefined;
   const enhancedMeasurement =
     container.enhancedMeasurement !== undefined
       ? validateEnhancedMeasurement(parsed, container.enhancedMeasurement, ['ga4', 'enhancedMeasurement'])
@@ -613,6 +636,7 @@ function validateGa4(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['ga4']
     streamWebsiteUrl,
     dataRetention,
     googleSignals,
+    attributionSettings,
     enhancedMeasurement,
     audiences: validateAudiences(parsed, container.audiences ?? {}, ['ga4', 'audiences']),
     eventCreateRules,
@@ -1039,6 +1063,16 @@ function validateAudienceEventFilter(parsed: ParsedConfig, raw: unknown, path: s
       ? validateAudienceFilterExpression(parsed, def.parameterFilter, [...path, 'parameterFilter'])
       : undefined;
   return { eventName, ...(parameterFilter !== undefined ? { parameterFilter } : {}) };
+}
+
+function validateAttributionSettings(parsed: ParsedConfig, raw: unknown, path: string[]): AttributionSettingsDef {
+  const def = requireObject(parsed, raw, path);
+  checkUnknownKeys(parsed, def, ATTRIBUTION_SETTINGS_KEYS, path);
+  const result: AttributionSettingsDef = {};
+  for (const key of ATTRIBUTION_SETTINGS_KEYS) {
+    if (def[key] !== undefined) (result as Record<string, string>)[key] = requireString(parsed, def[key], [...path, key]);
+  }
+  return result;
 }
 
 function validateEnhancedMeasurement(parsed: ParsedConfig, raw: unknown, path: string[]): EnhancedMeasurementDef {

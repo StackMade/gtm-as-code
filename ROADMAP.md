@@ -291,14 +291,22 @@ GA4 hardening is a hard prerequisite for all of it.
   are **blocked**, not open: the GA4 Admin API refuses to create `ANDROID_APP_DATA_STREAM`/
   `IOS_APP_DATA_STREAM` outright (confirmed live 2026-08-30, "To create app streams, use the
   Firebase API"), so `ga4.dataStreams` as a managed resource isn't implementable through this API.
-- Property settings. **Partially done.** `ga4.dataRetention` and `ga4.googleSignals` diff against
-  the property's live `dataRetentionSettings`/`googleSignalsSettings` and apply via `plan`/`apply`.
-  Both are property-level settings with no create/delete lifecycle, so they're diffed directly
-  against GA4's live state (`src/providers/google/ga4/settings.ts`) rather than modeled as
-  `Resource`s; `googleSignalsSettings` and a stream's `enhancedMeasurementSettings` live under the
-  GA4 Admin API's `v1alpha`, not `v1beta` like everything else this tool touches (confirmed live
-  2026-08-29: both 404 on `v1beta`), so `Ga4Client` routes each request to the version it actually
-  lives under. Still open: internal and developer traffic filters, attribution settings.
+- Property settings. **Done.** `ga4.dataRetention`, `ga4.googleSignals` and `ga4.attributionSettings`
+  diff against the property's live `dataRetentionSettings`/`googleSignalsSettings`/
+  `attributionSettings` and apply via `plan`/`apply`. All three are property-level settings with no
+  create/delete lifecycle, so they're diffed directly against GA4's live state
+  (`src/providers/google/ga4/settings.ts`) rather than modeled as `Resource`s; `googleSignalsSettings`,
+  `attributionSettings` and a stream's `enhancedMeasurementSettings` live under the GA4 Admin API's
+  `v1alpha`, not `v1beta` like everything else this tool touches (confirmed live 2026-08-29 for the
+  first two, 2026-08-31 for `attributionSettings`: all 404 on `v1beta`), so `Ga4Client` routes each
+  request to the version it actually lives under. `attributionSettings` accepts
+  `reportingAttributionModel`, `acquisitionConversionEventLookbackWindow` and
+  `otherConversionEventLookbackWindow`; `adsWebConversionDataExportScope` is excluded, confirmed live
+  to reject being PATCHed back to its own current value. Internal and developer traffic filters are
+  **blocked, not this tool's gap**: confirmed live 2026-08-31 that no `dataFilters`/
+  `internalTrafficRules`/`internalTrafficFilters` (or similar) collection exists under either
+  `v1alpha` or `v1beta`, so, like Search Console links below, there's no API for this tool to call;
+  internal/developer traffic stays GA4-UI-only.
 - Audiences. **Done.** `ga4.audiences` models audiences as create/update/archive `Resource`s (GA4's
   API has no `delete`, only `archive`). `membershipDurationDays`, `exclusionDurationMode`, and
   `filterClauses` are immutable once created; `plan` fails loudly, naming the field, rather than

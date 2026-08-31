@@ -257,6 +257,11 @@ ga4:
   googleSignals: GOOGLE_SIGNALS_ENABLED | GOOGLE_SIGNALS_DISABLED
     # Google Signals must already be activated on the property through the GA4 UI once;
     # this tool can only change its state after that, not activate it
+  attributionSettings:
+    reportingAttributionModel: string  # e.g. PAID_AND_ORGANIC_CHANNELS_DATA_DRIVEN
+    acquisitionConversionEventLookbackWindow: string  # e.g. ACQUISITION_CONVERSION_EVENT_LOOKBACK_WINDOW_30_DAYS
+    otherConversionEventLookbackWindow: string  # e.g. OTHER_CONVERSION_EVENT_LOOKBACK_WINDOW_90_DAYS
+    # all three optional; only the fields present in config are diffed and updated
   enhancedMeasurement:
     scrollsEnabled: boolean
     outboundClicksEnabled: boolean
@@ -346,15 +351,24 @@ GTM's fixed numeric trigger id instead (see `src/providers/google/gtm/builtin-tr
 two names above are supported; `"Consent Initialization - All Pages"` is a known GTM UI trigger whose
 numeric id couldn't be confirmed through the API and isn't guessed at.
 
-`ga4.dataRetention`, `ga4.googleSignals` and `ga4.enhancedMeasurement` have no create/delete
-lifecycle, unlike dimensions/metrics/keyEvents. `plan`/`drift` compare the declared value against
-GA4's live property/stream state and report a difference as an update; `apply` PATCHes it. A setting
-left out of config is never touched, so enabling one by hand in the GA4 UI is never reported as
-drift. `dataRetention` and `googleSignals` are property-level and apply regardless of
-`streamWebsiteUrl`; `enhancedMeasurement` is scoped to the stream `streamWebsiteUrl` resolves to, so
-it requires that field. `googleSignals` and `enhancedMeasurement` live under the GA4 Admin API's
-`v1alpha`, not `v1beta` like everything else this tool touches, since GA4 hasn't promoted them to
-`v1beta` yet; this tool routes each request to the right version internally.
+`ga4.dataRetention`, `ga4.googleSignals`, `ga4.attributionSettings` and `ga4.enhancedMeasurement`
+have no create/delete lifecycle, unlike dimensions/metrics/keyEvents. `plan`/`drift` compare the
+declared value against GA4's live property/stream state and report a difference as an update;
+`apply` PATCHes it. A setting left out of config is never touched, so enabling one by hand in the
+GA4 UI is never reported as drift. `dataRetention`, `googleSignals` and `attributionSettings` are
+property-level and apply regardless of `streamWebsiteUrl`; `enhancedMeasurement` is scoped to the
+stream `streamWebsiteUrl` resolves to, so it requires that field. `googleSignals`,
+`attributionSettings` and `enhancedMeasurement` live under the GA4 Admin API's `v1alpha`, not
+`v1beta` like everything else this tool touches, since GA4 hasn't promoted them to `v1beta` yet;
+this tool routes each request to the right version internally. `attributionSettings` accepts only
+`reportingAttributionModel`, `acquisitionConversionEventLookbackWindow` and
+`otherConversionEventLookbackWindow`; `adsWebConversionDataExportScope` is left out since it's an
+Ads-linking concept GA4's own Attribution settings UI doesn't expose there either, and it rejected
+being set back to its own current value when tried live.
+
+Internal traffic and developer traffic filters have no public GA4 Admin API resource at all
+(confirmed live: every plausible collection name under both `v1beta` and `v1alpha` 404s), so they
+stay GA4-UI-only, alongside iOS/Android data streams.
 
 `ga4.audiences` are create/update/archive `Resource`s like dimensions and key events, not
 settings-diffed like the property/stream fields above, since GA4's Admin API has no audience `delete`,

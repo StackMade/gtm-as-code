@@ -47,6 +47,38 @@ test('diffGa4Settings surfaces a googleSignals change when it differs from live 
   assert.deepEqual(diff.googleSignals, { patch: { state: 'GOOGLE_SIGNALS_DISABLED' }, updateMask: ['state'] });
 });
 
+test('diffGa4Settings surfaces only the attributionSettings fields that changed', async () => {
+  const ga4 = client({
+    attributionSettings: {
+      reportingAttributionModel: 'PAID_AND_ORGANIC_CHANNELS_DATA_DRIVEN',
+      acquisitionConversionEventLookbackWindow: 'ACQUISITION_CONVERSION_EVENT_LOOKBACK_WINDOW_30_DAYS',
+      otherConversionEventLookbackWindow: 'OTHER_CONVERSION_EVENT_LOOKBACK_WINDOW_90_DAYS',
+    },
+  });
+  const diff = await diffGa4Settings(ga4, {
+    ...baseGa4Config(),
+    attributionSettings: {
+      reportingAttributionModel: 'PAID_AND_ORGANIC_CHANNELS_DATA_DRIVEN',
+      otherConversionEventLookbackWindow: 'OTHER_CONVERSION_EVENT_LOOKBACK_WINDOW_60_DAYS',
+    },
+  });
+  assert.deepEqual(diff.attributionSettings, {
+    patch: { otherConversionEventLookbackWindow: 'OTHER_CONVERSION_EVENT_LOOKBACK_WINDOW_60_DAYS' },
+    updateMask: ['otherConversionEventLookbackWindow'],
+  });
+});
+
+test('diffGa4Settings is empty when attributionSettings already matches live state', async () => {
+  const ga4 = client({
+    attributionSettings: { reportingAttributionModel: 'PAID_AND_ORGANIC_CHANNELS_DATA_DRIVEN' },
+  });
+  const diff = await diffGa4Settings(ga4, {
+    ...baseGa4Config(),
+    attributionSettings: { reportingAttributionModel: 'PAID_AND_ORGANIC_CHANNELS_DATA_DRIVEN' },
+  });
+  assert.equal(diff.attributionSettings, undefined);
+});
+
 test('diffGa4Settings resolves the stream by URL and diffs only the enhanced measurement fields that changed', async () => {
   const ga4 = client({
     dataStreams: { dataStreams: [{ name: 'properties/1/dataStreams/9', type: 'WEB_DATA_STREAM', webStreamData: { defaultUri: 'https://example.com' } }] },

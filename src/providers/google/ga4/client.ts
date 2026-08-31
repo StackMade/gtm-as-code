@@ -22,6 +22,14 @@ export interface GoogleSignalsSettings {
   consent?: string;
 }
 
+export interface AttributionSettings {
+  name?: string;
+  reportingAttributionModel: string;
+  acquisitionConversionEventLookbackWindow: string;
+  otherConversionEventLookbackWindow: string;
+  adsWebConversionDataExportScope?: string;
+}
+
 /** A subset of a web data stream's fields, this tool only looks streams up by URL, never creates one. */
 export interface DataStream {
   name: string;
@@ -319,6 +327,32 @@ export class Ga4Client {
       return response.data;
     } catch (error) {
       throw new Ga4ApiError('update googleSignalsSettings', this.propertyId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  /** Property-scoped, like `googleSignalsSettings` (confirmed live 2026-08-31: 404 on `v1beta`). */
+  async getAttributionSettings(): Promise<AttributionSettings> {
+    try {
+      const response = await this.auth.request<AttributionSettings>({
+        url: `${V1ALPHA_BASE_URL}/properties/${this.propertyId}/attributionSettings`,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Ga4ApiError('get attributionSettings', this.propertyId, extractApiStatus(error), { cause: error });
+    }
+  }
+
+  async updateAttributionSettings(patch: Partial<AttributionSettings>, updateMask: string[]): Promise<AttributionSettings> {
+    try {
+      const response = await this.auth.request<AttributionSettings>({
+        url: `${V1ALPHA_BASE_URL}/properties/${this.propertyId}/attributionSettings`,
+        method: 'PATCH',
+        params: { updateMask: updateMask.join(',') },
+        data: patch,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Ga4ApiError('update attributionSettings', this.propertyId, extractApiStatus(error), { cause: error });
     }
   }
 

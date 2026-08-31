@@ -311,6 +311,31 @@ ga4:
   assert.throws(() => validate(yaml), ConfigError);
 });
 
+test('ga4.attributionSettings accepts its three known fields', () => {
+  const yaml = `
+ga4:
+  attributionSettings:
+    reportingAttributionModel: PAID_AND_ORGANIC_CHANNELS_DATA_DRIVEN
+    acquisitionConversionEventLookbackWindow: ACQUISITION_CONVERSION_EVENT_LOOKBACK_WINDOW_30_DAYS
+    otherConversionEventLookbackWindow: OTHER_CONVERSION_EVENT_LOOKBACK_WINDOW_90_DAYS
+`;
+  const config = validate(yaml);
+  assert.deepEqual(config.ga4.attributionSettings, {
+    reportingAttributionModel: 'PAID_AND_ORGANIC_CHANNELS_DATA_DRIVEN',
+    acquisitionConversionEventLookbackWindow: 'ACQUISITION_CONVERSION_EVENT_LOOKBACK_WINDOW_30_DAYS',
+    otherConversionEventLookbackWindow: 'OTHER_CONVERSION_EVENT_LOOKBACK_WINDOW_90_DAYS',
+  });
+});
+
+test('ga4.attributionSettings rejects an unknown field', () => {
+  const yaml = `
+ga4:
+  attributionSettings:
+    adsWebConversionDataExportScope: NOT_SELECTED_YET
+`;
+  assert.throws(() => validate(yaml), ConfigError);
+});
+
 test('ga4.enhancedMeasurement requires ga4.streamWebsiteUrl to be set', () => {
   const yaml = `
 ga4:
