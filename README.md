@@ -732,6 +732,21 @@ Merging to `main` opens a pull request titled "Release" that carries the version
 `CHANGELOG.md` entries. Merging that pull request publishes to npm with provenance, pushes the
 `v*` tag and creates the GitHub release.
 
+## About
+
+<a href="https://stackmade.pl">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/stackmade-logo-on-dark.svg">
+    <img src="./assets/stackmade-logo-on-light.svg" alt="StackMade" height="32">
+  </picture>
+</a>
+
+Built by [StackMade](https://stackmade.pl) - a family of small, focused tools shipped as
+code-first products.
+
+Maintained by [Krzysztof Słomka](https://slomka.pro), software architect specializing in fintech,
+distributed systems and event-driven architectures.
+
 ## License
 
 MIT, see [LICENSE](./LICENSE).
