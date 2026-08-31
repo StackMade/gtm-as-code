@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildOwnershipNotes, parseOwnershipNotes, MANAGED_BY } from './ownership.js';
+import { buildOwnershipNotes, extractUserNotes, parseOwnershipNotes, MANAGED_BY } from './ownership.js';
 
 test('parses ownership stamped by buildOwnershipNotes', () => {
   const notes = buildOwnershipNotes('generate_lead');
@@ -23,4 +23,19 @@ test('unmanaged resources (no ownership marker) parse to null', () => {
 test('protected resources are stamped and parsed back as protected', () => {
   const notes = buildOwnershipNotes('generate_lead', true);
   assert.deepEqual(parseOwnershipNotes(notes), { resourceId: 'generate_lead', protected: true });
+});
+
+test('extractUserNotes strips the ownership block off a managed resource', () => {
+  const notes = buildOwnershipNotes('generate_lead', false, 'Handles the contact form.');
+  assert.equal(extractUserNotes(notes), 'Handles the contact form.');
+});
+
+test('extractUserNotes returns undefined when there is no user text', () => {
+  const notes = buildOwnershipNotes('generate_lead');
+  assert.equal(extractUserNotes(notes), undefined);
+});
+
+test('extractUserNotes passes through notes with no ownership marker unchanged', () => {
+  assert.equal(extractUserNotes('Just a manual note.'), 'Just a manual note.');
+  assert.equal(extractUserNotes(undefined), undefined);
 });

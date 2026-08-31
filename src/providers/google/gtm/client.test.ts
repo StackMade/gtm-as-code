@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { GtmClient } from './client.js';
+import { GtmClient, resolveWorkspaceId } from './client.js';
 import { buildOwnershipNotes } from './ownership.js';
 
 interface RequestOptions {
@@ -174,6 +174,77 @@ test('enableBuiltInVariables is a no-op for an empty list', async () => {
   const client = new GtmClient(auth as any, ref);
 
   await client.enableBuiltInVariables([]);
+});
+
+test('update preserves the remote object\'s hand-written notes alongside the ownership stamp', async () => {
+  const calls: unknown[] = [];
+  const auth = {
+    request: async (options: unknown) => {
+      calls.push(options);
+      return { data: {} };
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+  const existingNotes = buildOwnershipNotes('purchase', false, 'Handles the contact form.');
+
+  await client.update('trigger', 'purchase', '7', { name: 'purchase', type: 'pageview' }, false, existingNotes);
+
+  const body = (calls[0] as { data: { notes: string } }).data;
+  assert.match(body.notes, /Handles the contact form\./);
+  assert.match(body.notes, /resource-id: purchase/);
+});
+
+test('update falls back to just the ownership stamp when there were no existing notes', async () => {
+  const calls: unknown[] = [];
+  const auth = {
+    request: async (options: unknown) => {
+      calls.push(options);
+      return { data: {} };
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = new GtmClient(auth as any, ref);
+
+  await client.update('trigger', 'purchase', '7', { name: 'purchase', type: 'pageview' }, false, undefined);
+
+  const body = (calls[0] as { data: { notes: string } }).data;
+  assert.match(body.notes, /resource-id: purchase/);
+  assert.doesNotMatch(body.notes, /Handles/);
+});
+
+test('resolveWorkspaceId returns the first workspace when none is configured', async () => {
+  const auth = { request: async () => ({ data: { workspace: [{ workspaceId: '4', name: 'Default Workspace' }, { workspaceId: '5' }] } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const id = await resolveWorkspaceId(auth as any, '1', '2', undefined);
+
+  assert.equal(id, '4');
+});
+
+test('resolveWorkspaceId matches a configured workspace id directly', async () => {
+  const auth = { request: async () => ({ data: { workspace: [{ workspaceId: '4', name: 'Default Workspace' }, { workspaceId: '5', name: 'Staging' }] } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const id = await resolveWorkspaceId(auth as any, '1', '2', '5');
+
+  assert.equal(id, '5');
+});
+
+test('resolveWorkspaceId matches a configured workspace by display name', async () => {
+  const auth = { request: async () => ({ data: { workspace: [{ workspaceId: '4', name: 'Default Workspace' }, { workspaceId: '5', name: 'Staging' }] } }) };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const id = await resolveWorkspaceId(auth as any, '1', '2', 'Staging');
+
+  assert.equal(id, '5');
+});
+
+test('resolveWorkspaceId throws a clear error naming the workspace field when nothing matches', async () => {
+  const auth = { request: async () => ({ data: { workspace: [{ workspaceId: '4', name: 'Default Workspace' }] } }) };
+
+  await assert.rejects(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => resolveWorkspaceId(auth as any, '1', '2', 'Nonexistent'),
+    /google\.gtm\.workspace is set to "Nonexistent"/,
+  );
 });
 
 test('listManaged sees resources that only appear on a later page', async () => {

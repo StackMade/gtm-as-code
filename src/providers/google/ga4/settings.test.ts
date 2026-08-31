@@ -93,6 +93,33 @@ test('diffGa4Settings resolves the stream by URL and diffs only the enhanced mea
   assert.deepEqual(diff.enhancedMeasurement, { patch: { scrollsEnabled: false }, updateMask: ['scrollsEnabled'] });
 });
 
+test('diffGa4Settings does not flag a declared false enhancedMeasurement field the API omits (proto3 default)', async () => {
+  const ga4 = client({
+    dataStreams: { dataStreams: [{ name: 'properties/1/dataStreams/9', type: 'WEB_DATA_STREAM', webStreamData: { defaultUri: 'https://example.com' } }] },
+    // proto3 JSON omits `false` fields entirely — outboundClicksEnabled is absent, not `false`.
+    enhancedMeasurementSettings: { scrollsEnabled: true },
+  });
+  const diff = await diffGa4Settings(ga4, {
+    ...baseGa4Config(),
+    streamWebsiteUrl: 'https://example.com',
+    enhancedMeasurement: { scrollsEnabled: true, outboundClicksEnabled: false },
+  });
+  assert.equal(diff.enhancedMeasurement, undefined);
+});
+
+test('diffGa4Settings still detects real drift when a declared-false field was enabled live', async () => {
+  const ga4 = client({
+    dataStreams: { dataStreams: [{ name: 'properties/1/dataStreams/9', type: 'WEB_DATA_STREAM', webStreamData: { defaultUri: 'https://example.com' } }] },
+    enhancedMeasurementSettings: { outboundClicksEnabled: true },
+  });
+  const diff = await diffGa4Settings(ga4, {
+    ...baseGa4Config(),
+    streamWebsiteUrl: 'https://example.com',
+    enhancedMeasurement: { outboundClicksEnabled: false },
+  });
+  assert.deepEqual(diff.enhancedMeasurement, { patch: { outboundClicksEnabled: false }, updateMask: ['outboundClicksEnabled'] });
+});
+
 test('diffGa4Settings throws when no stream matches the configured URL, listing the streams that do exist', async () => {
   const ga4 = client({ dataStreams: { dataStreams: [{ name: 'properties/1/dataStreams/9', type: 'WEB_DATA_STREAM', webStreamData: { defaultUri: 'https://other.example.com' } }] } });
   await assert.rejects(

@@ -71,7 +71,8 @@ export async function diffGa4Settings(
       const patch: Record<string, boolean> = {};
       const updateMask: string[] = [];
       for (const [key, value] of Object.entries(config.enhancedMeasurement)) {
-        if (current[key] !== value) {
+        // proto3 JSON omits `false` fields entirely, so an unset key means false, not "unknown".
+        if ((current[key] ?? false) !== value) {
           patch[key] = value as boolean;
           updateMask.push(key);
         }

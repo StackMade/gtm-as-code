@@ -1,7 +1,7 @@
 import type { AuthClient } from 'google-auth-library';
 import type { Resource } from '../../../core/resource.js';
 import { GtmApiError, extractApiStatus } from './errors.js';
-import { buildOwnershipNotes, parseOwnershipNotes } from './ownership.js';
+import { buildOwnershipNotes, extractUserNotes, parseOwnershipNotes } from './ownership.js';
 
 const BASE_URL = 'https://www.googleapis.com/tagmanager/v2';
 
@@ -37,24 +37,41 @@ export type GtmObject = Record<string, unknown> & { notes?: string };
 
 type GtmListResponse = Record<string, unknown> & { nextPageToken?: string };
 
-/** Resolves the workspace id to operate on: the configured one, or the container's first workspace. */
+/**
+ * Resolves the workspace id to operate on: the configured `workspace` — matched against either
+ * a workspace id or its display name (`init`/docs suggest a name like "Default Workspace", GTM's
+ * own id field is what the API actually needs) — or the container's first workspace if
+ * unconfigured.
+ */
 export async function resolveWorkspaceId(
   auth: AuthClient,
   accountId: string,
   containerId: string,
   workspace?: string,
 ): Promise<string> {
-  if (workspace) return workspace;
+  let list: Array<{ workspaceId: string; name?: string }>;
   try {
-    const response = await auth.request<{ workspace?: Array<{ workspaceId: string }> }>({
+    const response = await auth.request<{ workspace?: Array<{ workspaceId: string; name?: string }> }>({
       url: `${BASE_URL}/accounts/${accountId}/containers/${containerId}/workspaces`,
     });
-    const first = response.data.workspace?.[0];
-    if (!first) throw new Error('Container has no workspaces');
-    return first.workspaceId;
+    list = response.data.workspace ?? [];
   } catch (error) {
-    throw new GtmApiError('resolve default workspace for', containerId, extractApiStatus(error), { cause: error });
+    throw new GtmApiError('resolve workspace for', containerId, extractApiStatus(error), { cause: error });
   }
+  if (!workspace) {
+    const first = list[0];
+    if (!first) throw new GtmApiError('resolve default workspace for', containerId, 'NOT_FOUND');
+    return first.workspaceId;
+  }
+  const match = list.find((w) => w.workspaceId === workspace || w.name === workspace);
+  if (!match) {
+    const available = list.map((w) => `${w.workspaceId} (${w.name ?? 'unnamed'})`).join(', ') || 'none';
+    throw new Error(
+      `google.gtm.workspace is set to "${workspace}", which matches neither a workspace id nor a display name ` +
+        `in container ${containerId}. Available workspaces: ${available}.`,
+    );
+  }
+  return match.workspaceId;
 }
 
 export class GtmClient {
@@ -115,9 +132,22 @@ export class GtmClient {
     }
   }
 
-  /** Updates an existing GTM object by its GTM-assigned id, preserving ownership metadata. */
-  async update(kind: GtmKind, resourceId: string, gtmId: string, payload: GtmObject, isProtected?: boolean): Promise<GtmObject> {
-    const body = { ...payload, notes: buildOwnershipNotes(resourceId, isProtected, payload.notes) };
+  /**
+   * Updates an existing GTM object by its GTM-assigned id, preserving ownership metadata and
+   * any hand-written notes already on the remote object — `payload` never carries `notes` (the
+   * mapping layer doesn't map that field), so without `existingNotes` this would silently
+   * replace a user's note with just the ownership stamp.
+   */
+  async update(
+    kind: GtmKind,
+    resourceId: string,
+    gtmId: string,
+    payload: GtmObject,
+    isProtected?: boolean,
+    existingNotes?: string,
+  ): Promise<GtmObject> {
+    const userNotes = payload.notes ?? extractUserNotes(existingNotes);
+    const body = { ...payload, notes: buildOwnershipNotes(resourceId, isProtected, userNotes) };
     try {
       const response = await this.auth.request<GtmObject>({
         url: `${this.collectionUrl(kind)}/${gtmId}`,

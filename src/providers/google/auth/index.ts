@@ -13,6 +13,8 @@ import type { AuthClient } from 'google-auth-library';
 export const SCOPES = {
   gtmReadonly: 'https://www.googleapis.com/auth/tagmanager.readonly',
   gtmEdit: 'https://www.googleapis.com/auth/tagmanager.edit.containers',
+  /** `workspaces/{id}:create_version` needs this on top of `gtmPublish` — `tagmanager.publish` alone 403s. */
+  gtmEditVersions: 'https://www.googleapis.com/auth/tagmanager.edit.containerversions',
   gtmPublish: 'https://www.googleapis.com/auth/tagmanager.publish',
   ga4Edit: 'https://www.googleapis.com/auth/analytics.edit',
   ga4Readonly: 'https://www.googleapis.com/auth/analytics.readonly',

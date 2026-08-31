@@ -198,7 +198,7 @@ google:
   gtm:
     accountId: string
     containerId: string
-    workspace: string          # optional
+    workspace: string          # optional, workspace id or display name (e.g. "Default Workspace")
 
   ga4:
     propertyId: string
@@ -529,7 +529,8 @@ instead (see [State](#state)).
 Creates a GTM container version from the current workspace and publishes it. The version name and
 notes are taken from the current commit (short SHA and subject line) when run inside a git
 checkout, so the GTM version history stays readable against your commit history. Requires the
-`tagmanager.publish` scope in addition to the ones `apply` already needs.
+`tagmanager.publish` and `tagmanager.edit.containerversions` scopes (the latter is what
+`workspaces:create_version` actually checks — `tagmanager.publish` alone 403s on it).
 
 ### `gtm-code rollback [--auto-approve]`
 
@@ -537,6 +538,7 @@ Republishes the container version that was live immediately before the current o
 versions and prompts `Continue? [y/N]` unless `--auto-approve` is passed. Does nothing to the
 workspace or to `.analytics/state.json`; it only changes which already-existing version is live, so
 it's close to free to run once `publish` has created a version history to roll back through.
+Requires the same scopes as `publish`.
 
 ### `gtm-code pull [--resource <kindAndId>] [--out <path>] [--from-export <path>]`
 

@@ -25,3 +25,10 @@ export function parseOwnershipNotes(notes: string | undefined): { resourceId: st
   const resourceId = line.slice(RESOURCE_ID_PREFIX.length).trim();
   return resourceId ? { resourceId, protected: lines.includes(PROTECTED_LINE) } : null;
 }
+
+/** Recovers the hand-written text portion of a managed resource's notes, stripping the ownership block `buildOwnershipNotes` appended. */
+export function extractUserNotes(notes: string | undefined): string | undefined {
+  if (!notes || !notes.includes(MANAGED_BY_LINE)) return notes;
+  const userPart = notes.slice(0, notes.indexOf(MANAGED_BY_LINE)).replace(/\n+$/, '');
+  return userPart.length > 0 ? userPart : undefined;
+}

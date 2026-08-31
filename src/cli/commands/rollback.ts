@@ -14,7 +14,7 @@ export async function rollback(opts: GlobalOptions): Promise<void> {
     const interpolated = { ...parsed, data: interpolateConfig(parsed) };
     const config = validateConfig(interpolated);
 
-    const auth = await authorize([SCOPES.gtmPublish, SCOPES.gtmReadonly]);
+    const auth = await authorize([SCOPES.gtmPublish, SCOPES.gtmEditVersions, SCOPES.gtmReadonly]);
     const workspaceId = await resolveWorkspaceId(
       auth,
       config.google.gtm.accountId,

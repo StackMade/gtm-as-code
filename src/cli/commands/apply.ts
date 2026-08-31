@@ -195,7 +195,8 @@ async function execute(result: PlanResult): Promise<void> {
         folderGtmIds,
       });
       const isProtected = (change.after.desiredState as Record<string, unknown>).protected === true;
-      await gtm.update(kind, id, gtmId, payload, isProtected);
+      const existingNotes = (change.before.desiredState as Record<string, unknown>).notes as string | undefined;
+      await gtm.update(kind, id, gtmId, payload, isProtected, existingNotes);
     }
   }
   for (const change of ga4Changes.filter(isUpdate)) {
