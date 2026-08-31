@@ -1,6 +1,6 @@
 {
   "name": "@stackmade/gtm-as-code",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "GTM & GA4 as code — define Google Tag Manager and Analytics 4 config in YAML, plan/apply like Terraform.",
   "license": "MIT",
   "type": "module",
