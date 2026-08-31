@@ -39,6 +39,15 @@ test('managed resource missing from desired state is a delete', () => {
   assert.deepEqual(changes, [{ operation: 'delete', resource: remote }]);
 });
 
+test('a key present with value undefined on one side is not a difference (Zod-optional field the remote payload never had)', () => {
+  const remote = [resource('dlv_analytics_event', { type: 'autoEventVariable', varType: 'ATTRIBUTE' })];
+  const desired = [resource('dlv_analytics_event', { type: 'autoEventVariable', varType: 'ATTRIBUTE', folder: undefined })];
+
+  const changes = diff(desired, remote);
+
+  assert.deepEqual(changes, []);
+});
+
 test('same id across different types (event-derived trigger + tag) diffs independently, no collision', () => {
   const trigger: Resource = { id: 'generate_lead', type: 'gtm.trigger', provider: 'google', desiredState: { type: 'customEvent' } };
   const tag: Resource = { id: 'generate_lead', type: 'gtm.tag', provider: 'google', desiredState: { type: 'ga4Event' } };

@@ -7,8 +7,13 @@ export function deepEqual(a: unknown, b: unknown): boolean {
   if (Array.isArray(a) !== Array.isArray(b)) return false;
   const aObj = a as Record<string, unknown>;
   const bObj = b as Record<string, unknown>;
-  const aKeys = Object.keys(aObj);
-  const bKeys = Object.keys(bObj);
+  // A key present with an `undefined` value (e.g. an optional Zod field the schema always
+  // materializes) is indistinguishable from an absent key everywhere else in this tool —
+  // JSON.stringify drops it, the Google APIs never see it — so it must not count here either,
+  // or a config that never sets an optional field reports a permanent phantom `update` against
+  // a remote object that never had the key at all.
+  const aKeys = Object.keys(aObj).filter((k) => aObj[k] !== undefined);
+  const bKeys = Object.keys(bObj).filter((k) => bObj[k] !== undefined);
   if (aKeys.length !== bKeys.length) return false;
   return aKeys.every((key) => key in bObj && deepEqual(aObj[key], bObj[key]));
 }
