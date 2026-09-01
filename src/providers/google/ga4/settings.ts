@@ -84,6 +84,52 @@ export async function diffGa4Settings(
   return result;
 }
 
+/** One field a settings PATCH asked for and the live object does not have afterwards. */
+export interface Ga4SettingsMismatch {
+  setting: string;
+  field: string;
+  requested: unknown;
+  live: unknown;
+}
+
+/**
+ * Reads the four settings objects back after `apply` PATCHed them and reports any field that did not
+ * take. These settings have no create/delete lifecycle to fall back on, and GA4 answers some writes
+ * with a `200` that changes nothing (`siteSearchEnabled` needs a `searchQueryParameter`, for one), so
+ * without this check the only symptom is that the next `plan` shows the same update again. Only
+ * fields the PATCH actually named are compared.
+ */
+export async function verifyGa4SettingsApplied(ga4: Ga4Client, diff: Ga4SettingsDiff): Promise<Ga4SettingsMismatch[]> {
+  const mismatches: Ga4SettingsMismatch[] = [];
+
+  const compare = (setting: string, patch: Record<string, unknown>, updateMask: string[], live: Record<string, unknown>, absentIs?: unknown) => {
+    for (const field of updateMask) {
+      const liveValue = live[field] ?? absentIs;
+      if (liveValue !== patch[field]) mismatches.push({ setting, field, requested: patch[field], live: liveValue });
+    }
+  };
+
+  if (diff.dataRetention) {
+    const live = (await ga4.getDataRetentionSettings()) as unknown as Record<string, unknown>;
+    compare('dataRetention', diff.dataRetention.patch, diff.dataRetention.updateMask, live);
+  }
+  if (diff.googleSignals) {
+    const live = (await ga4.getGoogleSignalsSettings()) as unknown as Record<string, unknown>;
+    compare('googleSignals', diff.googleSignals.patch, diff.googleSignals.updateMask, live);
+  }
+  if (diff.attributionSettings) {
+    const live = (await ga4.getAttributionSettings()) as unknown as Record<string, unknown>;
+    compare('attributionSettings', diff.attributionSettings.patch, diff.attributionSettings.updateMask, live);
+  }
+  if (diff.enhancedMeasurement && diff.streamName) {
+    const live = (await ga4.getEnhancedMeasurementSettings(diff.streamName)) as unknown as Record<string, unknown>;
+    // proto3 JSON omits `false`, same reason `diffGa4Settings` reads an absent key as `false`.
+    compare('enhancedMeasurement', diff.enhancedMeasurement.patch, diff.enhancedMeasurement.updateMask, live, false);
+  }
+
+  return mismatches;
+}
+
 export function hasGa4SettingsChanges(diff: Ga4SettingsDiff): boolean {
   return (
     diff.dataRetention !== undefined ||

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildPlanJson, buildPlanMarkdown, planJsonWithBuiltIns, planMarkdownWithBuiltIns, checkAudienceImmutableFields, type PlanResult } from './plan.js';
+import { buildPlanJson, buildPlanMarkdown, planJsonWithBuiltIns, planMarkdownWithBuiltIns, checkAudienceImmutableFields, checkUndeletableKeyEvents, type PlanResult } from './plan.js';
 import type { Change } from '../../core/resource.js';
 import type { Ga4SettingsDiff } from '../../providers/google/ga4/settings.js';
 
@@ -92,4 +92,29 @@ test('planMarkdownWithBuiltIns lists each GA4 setting that changed', () => {
     }),
   );
   assert.match(markdown, /GA4 settings to update: dataRetention → FOURTEEN_MONTHS, googleSignals → GOOGLE_SIGNALS_DISABLED/);
+});
+
+const deletePurchaseKeyEvent: Change = {
+  operation: 'delete',
+  resource: { id: 'purchase', type: 'ga4.keyEvent', provider: 'google', desiredState: {} },
+};
+
+test('checkUndeletableKeyEvents throws naming a key event GA4 reports as not deletable', () => {
+  assert.throws(
+    () => checkUndeletableKeyEvents([deletePurchaseKeyEvent], new Set(['purchase'])),
+    /ga4\.keyEvents\.purchase is a key event GA4 reports as not deletable/,
+  );
+});
+
+test('checkUndeletableKeyEvents allows deleting a custom key event', () => {
+  assert.doesNotThrow(() => checkUndeletableKeyEvents([deletePurchaseKeyEvent], new Set(['generate_lead'])));
+});
+
+test('checkUndeletableKeyEvents ignores non-delete changes and other kinds', () => {
+  const update: Change = {
+    operation: 'update',
+    before: { id: 'purchase', type: 'ga4.keyEvent', provider: 'google', desiredState: {} },
+    after: { id: 'purchase', type: 'ga4.keyEvent', provider: 'google', desiredState: { protected: true } },
+  };
+  assert.doesNotThrow(() => checkUndeletableKeyEvents([update, deleteDimension], new Set(['purchase', 'lead_type'])));
 });

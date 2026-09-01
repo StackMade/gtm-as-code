@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Ga4Client } from './client.js';
-import { diffGa4Settings, hasGa4SettingsChanges } from './settings.js';
+import { diffGa4Settings, hasGa4SettingsChanges, verifyGa4SettingsApplied } from './settings.js';
 import type { AnalyticsConfig } from '../../../config/schema.js';
 
 function fakeAuth(routes: Record<string, unknown>): { request: (opts: { url: string }) => Promise<{ data: unknown }> } {
@@ -134,4 +134,42 @@ test('diffGa4Settings matches a stream URL regardless of a trailing slash', asyn
   });
   const diff = await diffGa4Settings(ga4, { ...baseGa4Config(), streamWebsiteUrl: 'https://example.com' });
   assert.equal(diff.streamName, 'properties/1/dataStreams/9');
+});
+
+test('verifyGa4SettingsApplied reports a field the property did not take', async () => {
+  const ga4 = client({
+    'enhancedMeasurementSettings': { scrollsEnabled: true, siteSearchEnabled: false },
+  });
+  const mismatches = await verifyGa4SettingsApplied(ga4, {
+    streamName: 'properties/1/dataStreams/2',
+    enhancedMeasurement: { patch: { scrollsEnabled: true, siteSearchEnabled: true }, updateMask: ['scrollsEnabled', 'siteSearchEnabled'] },
+  });
+  assert.deepEqual(mismatches, [
+    { setting: 'enhancedMeasurement', field: 'siteSearchEnabled', requested: true, live: false },
+  ]);
+});
+
+test('verifyGa4SettingsApplied treats an absent boolean as false, not as a mismatch', async () => {
+  const ga4 = client({ 'enhancedMeasurementSettings': { scrollsEnabled: true } });
+  const mismatches = await verifyGa4SettingsApplied(ga4, {
+    streamName: 'properties/1/dataStreams/2',
+    enhancedMeasurement: { patch: { outboundClicksEnabled: false }, updateMask: ['outboundClicksEnabled'] },
+  });
+  assert.deepEqual(mismatches, []);
+});
+
+test('verifyGa4SettingsApplied is quiet when every patched field took', async () => {
+  const ga4 = client({
+    dataRetentionSettings: { eventDataRetention: 'FOURTEEN_MONTHS', userDataRetention: 'TWO_MONTHS' },
+    googleSignalsSettings: { state: 'GOOGLE_SIGNALS_ENABLED' },
+  });
+  const mismatches = await verifyGa4SettingsApplied(ga4, {
+    dataRetention: { patch: { eventDataRetention: 'FOURTEEN_MONTHS' }, updateMask: ['eventDataRetention'] },
+    googleSignals: { patch: { state: 'GOOGLE_SIGNALS_ENABLED' }, updateMask: ['state'] },
+  });
+  assert.deepEqual(mismatches, []);
+});
+
+test('verifyGa4SettingsApplied makes no calls for settings the plan did not touch', async () => {
+  assert.deepEqual(await verifyGa4SettingsApplied(client({}), {}), []);
 });

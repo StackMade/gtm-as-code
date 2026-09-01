@@ -159,10 +159,15 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
     }
   }
 
+  // Collected here rather than carried on `desiredState`: it is a property of the live object, not
+  // of the config, and anything on `desiredState` would show up as a diff.
+  const undeletableKeyEvents = new Set<string>();
+
   for (const { kind, resources: managed } of ga4Managed) {
     for (const resource of managed) {
       const object = resource.desiredState as Ga4Object;
       if (object.name) ga4Names[`${kind}:${resource.id}`] = object.name;
+      if (kind === 'keyEvent' && object.deletable === false) undeletableKeyEvents.add(resource.id);
       const desiredState = fromGa4Payload(kind, object);
       if (object.__protected) desiredState.protected = true;
       remote.push({ ...resource, desiredState });
@@ -172,6 +177,7 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
   const desired = toResources(compiled);
   const changes = diff(desired, remote);
   checkAudienceImmutableFields(changes);
+  checkUndeletableKeyEvents(changes, undeletableKeyEvents);
 
   const counts = { create: 0, update: 0, delete: 0 };
   for (const change of changes) counts[change.operation]++;
@@ -216,6 +222,26 @@ export function checkAudienceImmutableFields(changes: Change[]): void {
           'or revert the change if it was accidental.',
       );
     }
+  }
+}
+
+/**
+ * GA4 only deletes key events it reports as `deletable`. A property comes with default key events on
+ * recommended events (`purchase` among them), and `keyEvents.delete` on one of those answers
+ * `INVALID_ARGUMENT`. Left unchecked, dropping such an entry from config plans a `- delete` that
+ * fails mid-`apply`, every time, with an error naming the API rather than the config key. Fail here
+ * instead, the same way an immutable audience field does.
+ */
+export function checkUndeletableKeyEvents(changes: Change[], undeletable: ReadonlySet<string>): void {
+  for (const change of changes) {
+    if (change.operation !== 'delete' || change.resource.type !== 'ga4.keyEvent') continue;
+    if (!undeletable.has(change.resource.id)) continue;
+    throw new Error(
+      `ga4.keyEvents.${change.resource.id} is a key event GA4 reports as not deletable, which is how it marks the ` +
+        'default key events it creates on a property. The Admin API only deletes custom ones, so this delete would ' +
+        `fail. Leave ${change.resource.id} declared in config (it costs nothing if the event never fires), or unmark ` +
+        'it as a key event in the GA4 UI first, which removes it from live state and makes the config change a no-op.',
+    );
   }
 }
 

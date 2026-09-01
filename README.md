@@ -252,6 +252,8 @@ ga4:
       # measurementUnit optional
   keyEvents:
     <name>: { protected: boolean }
+      # a default key event GA4 created itself cannot be deleted through the API; plan says so
+      # rather than planning a delete that fails
   streamWebsiteUrl: string
     # the web data stream these stream-scoped settings apply to, looked up by URL, never created
   dataRetention: TWO_MONTHS | FOURTEEN_MONTHS | TWENTY_SIX_MONTHS | THIRTY_EIGHT_MONTHS | FIFTY_MONTHS
@@ -360,7 +362,11 @@ numeric id couldn't be confirmed through the API and isn't guessed at.
 `ga4.dataRetention`, `ga4.googleSignals`, `ga4.attributionSettings` and `ga4.enhancedMeasurement`
 have no create/delete lifecycle, unlike dimensions/metrics/keyEvents. `plan`/`drift` compare the
 declared value against GA4's live property/stream state and report a difference as an update;
-`apply` PATCHes it. A setting left out of config is never touched, so enabling one by hand in the
+`apply` PATCHes it, then reads the object back and compares the fields it just wrote. GA4 answers
+some of these writes with a `200` that changes nothing on the property, so a mismatch is reported by
+name and `apply` exits non-zero: everything else in the run applied, but a value GA4 refuses to set
+would otherwise show up as the same pending update in every later `plan`. Drop such a field from
+config, or set it through the GA4 UI where it belongs. A setting left out of config is never touched, so enabling one by hand in the
 GA4 UI is never reported as drift. `dataRetention`, `googleSignals` and `attributionSettings` are
 property-level and apply regardless of `streamWebsiteUrl`; `enhancedMeasurement` is scoped to the
 stream `streamWebsiteUrl` resolves to, so it requires that field. `googleSignals`,
@@ -527,6 +533,12 @@ your routine CI apply already uses, and a destructive change deserves its own op
 riding along with it. This applies to GA4 deletes too, even though a GA4 custom dimension or metric
 is archived rather than hard-deleted (key events are hard-deleted); `plan` prints all three as
 `- delete`, so `apply` treats them the same way for this gate.
+
+One GA4 delete never gets that far: a key event the Admin API reports as not deletable, which is how
+it marks the default key events a property is created with. Removing one from config fails `plan`
+with a message naming it, instead of failing part-way through `apply` on every run. Either leave the
+entry declared, which costs nothing when the event never fires, or unmark it as a key event in the
+GA4 UI first so the config change has nothing left to delete.
 
 A resource marked `protected: true` in config needs `--allow-destroy-protected` on top of
 `--allow-destroy` before `apply` deletes it, even if `--allow-destroy` alone would otherwise cover

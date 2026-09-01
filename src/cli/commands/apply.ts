@@ -10,7 +10,7 @@ import type { GtmKind } from '../../providers/google/gtm/client.js';
 import { gtmIdField } from '../../providers/google/gtm/client.js';
 import { toGa4Payload } from '../../providers/google/ga4/mapping.js';
 import type { Ga4Kind } from '../../providers/google/ga4/client.js';
-import { hasGa4SettingsChanges } from '../../providers/google/ga4/settings.js';
+import { hasGa4SettingsChanges, verifyGa4SettingsApplied, type Ga4SettingsMismatch } from '../../providers/google/ga4/settings.js';
 import { WorkspaceConflictError } from '../../providers/google/gtm/errors.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
@@ -75,11 +75,35 @@ export async function apply(opts: GlobalOptions): Promise<void> {
     }
 
     await withStateLock(result.statePath, () => execute(result));
+
+    const mismatches = await verifyGa4SettingsApplied(result.ga4, result.ga4Settings);
+    if (mismatches.length > 0) {
+      printSettingsMismatches(mismatches);
+      process.exitCode = 1;
+      return;
+    }
+
     console.log('Apply complete.');
   } catch (error) {
     printFailure(error);
     process.exitCode = 1;
   }
+}
+
+/**
+ * GA4 answers some settings writes with a `200` and then leaves the property unchanged. Everything
+ * else in the run did apply, so this is reported rather than thrown, but the exit code is non-zero:
+ * a declared value the API won't set means `plan` and `drift` report the same update forever.
+ */
+function printSettingsMismatches(mismatches: Ga4SettingsMismatch[]): void {
+  console.log('Apply finished, but GA4 accepted these settings writes without applying them:\n');
+  for (const { setting, field, requested, live } of mismatches) {
+    console.log(`  ${setting}.${field}: asked for ${JSON.stringify(requested)}, property still reports ${JSON.stringify(live)}`);
+  }
+  console.log(
+    '\nDrop the field from config, or set it through the GA4 UI if it belongs there — a value GA4 ' +
+      'refuses to set leaves permanent drift in every later plan.',
+  );
 }
 
 /** Deletes of resources marked `protected: true`, which need `--allow-destroy-protected` on top of `--allow-destroy`. */
