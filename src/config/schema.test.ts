@@ -664,3 +664,30 @@ ga4:
 `;
   assert.throws(() => validate(both), ConfigError);
 });
+
+test('a GTM type the provider layer cannot build fails validation offline', () => {
+  const yaml = `
+gtm:
+  variables:
+    form: { type: dataLayerVariabl, variableName: form }
+`;
+  assert.throws(() => validate(yaml), (error: unknown) => {
+    assert.ok(error instanceof ConfigError);
+    assert.match(error.message, /Unsupported variable type/);
+    assert.match(error.message, /dataLayerVariable/); // the "did you mean" suggestion
+    return true;
+  });
+});
+
+test('an unsupported trigger and tag type fail the same way', () => {
+  assert.throws(() => validate(`
+gtm:
+  triggers:
+    t: { type: scrollDept }
+`), ConfigError);
+  assert.throws(() => validate(`
+gtm:
+  tags:
+    t: { type: conversionLinker, consent: { status: notNeeded } }
+`), ConfigError);
+});

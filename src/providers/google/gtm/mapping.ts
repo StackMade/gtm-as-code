@@ -29,6 +29,30 @@ const BARE_TRIGGER_TYPES = [
   'consentInit',
 ] as const;
 
+/**
+ * Types `toGtmPayloadByType` can build a payload for. `folder` has no `type` at all, so it is not
+ * listed. Kept next to the dispatch it mirrors, and exported so `validate` can reject an unsupported
+ * type offline instead of letting `apply` fail against a half-written workspace. `mapping.test.ts`
+ * asserts every name here actually maps.
+ */
+export const SUPPORTED_GTM_TYPES: Record<'variable' | 'trigger' | 'tag', readonly string[]> = {
+  variable: [
+    'dataLayerVariable',
+    'constant',
+    'customJavaScript',
+    'lookupTable',
+    'regexTable',
+    'url',
+    'cookie',
+    'domElement',
+    'javascriptVariable',
+    'autoEventVariable',
+    'googleTagSettings',
+  ],
+  trigger: [...BARE_TRIGGER_TYPES, 'elementVisibility', 'timer', 'triggerGroup', 'customEvent'],
+  tag: ['customHtml', 'customImage', 'ga4Event', 'googleTag'],
+};
+
 /** Firing behavior shared by every tag type: priority, once-per-X, scheduling, setup/teardown tags. */
 function resolveTagFiringBehavior(desiredState: Record<string, unknown>): GtmObject {
   const extra: GtmObject = {};

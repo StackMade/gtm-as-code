@@ -3,6 +3,7 @@ import { locateLine, locateFile, type ParsedConfig } from './parser.js';
 import { closestMatch } from './suggest.js';
 import { BUILT_IN_VARIABLE_NAMES } from '../providers/google/gtm/builtin-variables.js';
 import { BUILT_IN_TRIGGERS, BUILT_IN_TRIGGER_NAMES } from '../providers/google/gtm/builtin-triggers.js';
+import { SUPPORTED_GTM_TYPES } from '../providers/google/gtm/mapping.js';
 
 export interface EventParameterDef {
   /** `items` is GA4's ecommerce item array (view_item, add_to_cart, purchase, ...). */
@@ -482,8 +483,8 @@ function validateGtm(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['gtm']
   const container = requireObject(parsed, raw, ['gtm']);
   checkUnknownKeys(parsed, container, ['variables', 'triggers', 'tags', 'folders', 'builtInVariables'], ['gtm']);
   return {
-    variables: validateResourceMap(parsed, container.variables ?? {}, ['gtm', 'variables']),
-    triggers: validateResourceMap(parsed, container.triggers ?? {}, ['gtm', 'triggers']),
+    variables: validateResourceMap(parsed, 'variable', container.variables ?? {}, ['gtm', 'variables']),
+    triggers: validateResourceMap(parsed, 'trigger', container.triggers ?? {}, ['gtm', 'triggers']),
     tags: validateTagMap(parsed, container.tags ?? {}, ['gtm', 'tags']),
     folders: requireObject(parsed, container.folders ?? {}, ['gtm', 'folders']),
     builtInVariables: validateBuiltInVariables(parsed, container.builtInVariables ?? [], ['gtm', 'builtInVariables']),
@@ -503,10 +504,12 @@ function validateBuiltInVariables(parsed: ParsedConfig, raw: unknown, path: stri
   return names;
 }
 
-// Only `type` (and, for tags, `trigger`) is checked: per-type property shapes belong to the
-// provider layer, which doesn't define them yet.
+// `type` is checked against what the provider layer can actually build (`requireSupportedType`).
+// Per-type property shapes are still unchecked: they belong to the provider layer, which doesn't
+// define them yet.
 function validateResourceMap(
   parsed: ParsedConfig,
+  kind: 'variable' | 'trigger',
   raw: unknown,
   path: string[],
 ): Record<string, ResourceDef> {
@@ -516,6 +519,7 @@ function validateResourceMap(
     const itemPath = [...path, name];
     const def = requireObject(parsed, value, itemPath);
     const type = requireString(parsed, def.type, [...itemPath, 'type']);
+    requireSupportedType(parsed, kind, type, [...itemPath, 'type']);
     const folder = def.folder !== undefined ? requireString(parsed, def.folder, [...itemPath, 'folder']) : undefined;
     const isProtected = def.protected !== undefined ? requireBoolean(parsed, def.protected, [...itemPath, 'protected']) : undefined;
     result[name] = { ...def, type, folder, ...(isProtected !== undefined ? { protected: isProtected } : {}) };
@@ -530,6 +534,7 @@ function validateTagMap(parsed: ParsedConfig, raw: unknown, path: string[]): Rec
     const itemPath = [...path, name];
     const def = requireObject(parsed, value, itemPath);
     const type = requireString(parsed, def.type, [...itemPath, 'type']);
+    requireSupportedType(parsed, 'tag', type, [...itemPath, 'type']);
     const trigger =
       def.trigger !== undefined
         ? requireStringArray(parsed, def.trigger, [...itemPath, 'trigger'])
@@ -1434,6 +1439,20 @@ function requireStringArray(parsed: ParsedConfig, value: unknown, path: string[]
     ]);
   }
   return value as string[];
+}
+
+/**
+ * Rejects a `type` the provider layer has no payload mapping for. Without this the only guard is
+ * `toGtmPayload`'s throw, which fires during `apply` after earlier resources in the same run have
+ * already been written to the workspace.
+ */
+function requireSupportedType(parsed: ParsedConfig, kind: 'variable' | 'trigger' | 'tag', type: string, path: string[]): void {
+  const supported = SUPPORTED_GTM_TYPES[kind];
+  if (supported.includes(type)) return;
+  const suggestion = closestMatch(type, supported);
+  const body = [{ label: `Unsupported ${kind} type`, value: type }];
+  if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
+  fail(parsed, path, body);
 }
 
 function requireEnum<T extends string>(

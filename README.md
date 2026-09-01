@@ -69,7 +69,10 @@ ga4:
 
 `analytics/.env.analytics.example` holds the IDs you gave `init`. Copy it to
 `analytics/.env.analytics` (gitignored, see [State](#state)) with your real values, or set the same
-variables in your CI environment.
+variables in your CI environment. Every command picks that file up on its own, from
+`analytics/.env.analytics` or `.env.analytics` in the working directory; `--env <path>` points at a
+different one. A variable already set in the environment always wins over the file, so a CI
+`env:` block is never overridden by a stray checkout.
 
 Check the config offline, no Google credentials required:
 
@@ -333,9 +336,12 @@ ga4:
     # Collection). This tool can only create the secret after that, not attest it.
 ```
 
-Only `type` (and, for tags, `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`) is
-schema-validated on `gtm.variables`, `gtm.triggers` and `gtm.tags` entries today. Per-resource-type
-property shapes aren't validated yet.
+On `gtm.variables`, `gtm.triggers` and `gtm.tags` entries, `validate` checks `type` against the
+types this tool can actually build a GTM payload for, and suggests the nearest name when it doesn't
+recognize one, so an unsupported or misspelled type fails offline rather than part-way through an
+`apply`. For tags it also checks `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`. Per-resource-type
+property shapes aren't validated yet: a `dataLayerVariable` missing its `variableName` still gets as
+far as the API.
 
 `gtm.builtInVariables` is enable-only: `plan`/`drift` report a name listed but not yet enabled
 remotely, `apply` enables it. Names not in the config are left alone — enabling one by hand in the
@@ -464,6 +470,7 @@ Global flags, available on every command:
 | Flag | Description |
 |---|---|
 | `-c, --config <path>` | Path to the config file (default: auto-discovered) |
+| `--env <path>` | Load environment variables from this file (default: `.env.analytics` or `analytics/.env.analytics`, if present). Values already in the environment are not overwritten. Named `--env`, not `--env-file`, because Node claims that one: it scans the whole command line for `--env-file` and exits before this CLI starts if the path is missing |
 | `-v, --verbose` | Verbose output |
 | `-q, --quiet` | Suppress non-error output |
 | `-f, --format <type>` | `text`, `json`, or `markdown`. `plan` supports all three; other commands ignore it and print `text` |
@@ -476,7 +483,8 @@ overwriting.
 
 ### `gtm-code validate`
 
-Parses and schema-checks the config offline. No Google API calls, no credentials needed.
+Parses and schema-checks the config offline, including whether every `gtm.*` `type` is one this tool
+can build. No Google API calls, no credentials needed.
 
 ### `gtm-code plan [--format text|json|markdown]`
 
@@ -504,7 +512,9 @@ detail `plan` does. Exit code `1` if drift is found (or on error), `0` if clean.
 Runs the same diff as `plan`, then executes it. Deletes go first (tags, then triggers, then
 variables, the reverse of creation order), then creates in dependency order so a tag can reference
 a trigger created in the same run, then updates. Prompts `Continue? [y/N]` unless `--auto-approve`
-is passed.
+is passed. With no terminal attached there is nothing to answer that prompt, so `apply` declines and
+says which flag it wanted rather than waiting: a scripted run passes `--auto-approve`, plus
+`--allow-destroy` if the plan deletes anything.
 
 `apply` only writes to the GTM workspace. Nothing reaches the live container until you run
 `gtm-code publish`. Before writing anything, `apply` also checks whether the workspace has changes
@@ -589,8 +599,10 @@ touched or deleted.
 
 `apply` holds an exclusive lock (`.analytics/state.json.lock`) for the duration of the run. Two
 concurrent `apply`s against the same state file can't interleave writes: the second one fails fast
-with a clear error instead of corrupting the file. If a run crashes without cleaning up, delete the
-leftover `.lock` file before retrying. The state file also carries a `version` field. A version this
+with a clear error instead of corrupting the file. A run killed outright leaves its lock behind; the
+next `apply` checks the pid recorded in it and takes the lock over when that process is gone. A pid
+only means something on the machine that wrote it, so a lock left by another host is reported instead
+of assumed stale, and deleting it by hand is then the right move. The state file also carries a `version` field. A version this
 CLI doesn't understand fails `plan`/`apply` loudly instead of silently treating the state as empty.
 
 Don't hand-edit `.analytics/state.json`. **Commit it.** It holds no secrets, only resource ids, and

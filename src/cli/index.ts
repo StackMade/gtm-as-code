@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
+import { loadEnvFile } from '../config/env-file.js';
+import { printFailure } from './failure.js';
 import { init } from './commands/init.js';
 import { validate } from './commands/validate.js';
 import { plan } from './commands/plan.js';
@@ -27,7 +29,23 @@ program
   .option('-v, --verbose', 'verbose output', false)
   .option('-q, --quiet', 'suppress non-error output', false)
   .option('-f, --format <type>', 'output format: text, json, markdown', 'text')
-  .option('-c, --config <path>', 'path to the analytics config file');
+  .option('-c, --config <path>', 'path to the analytics config file')
+  .option('--env <path>', 'load environment variables from this file (default: .env.analytics or analytics/.env.analytics)');
+
+// Config interpolation reads `${GTM_ACCOUNT_ID}` and friends straight from `process.env`, so the env
+// file has to be in place before any command runs. `loadEnvFile` never overwrites a variable that is
+// already set, so a CI `env:` block still wins. The flag is `--env` rather than `--env-file`: Node
+// claims the latter for itself and rejects a missing path at startup, before this process runs.
+program.hook('preAction', (_program, actionCommand) => {
+  const { env, verbose, quiet } = actionCommand.optsWithGlobals<GlobalOptions>();
+  try {
+    const loaded = loadEnvFile(env);
+    if (loaded && verbose && !quiet) console.log(`Loaded environment from ${loaded}`);
+  } catch (error) {
+    printFailure(error);
+    process.exit(1);
+  }
+});
 
 function globalOptions(cmd: Command): GlobalOptions {
   return cmd.optsWithGlobals<GlobalOptions>();

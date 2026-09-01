@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { toGtmPayload, fromGtmPayload } from './mapping.js';
+import { toGtmPayload, fromGtmPayload, SUPPORTED_GTM_TYPES } from './mapping.js';
 
 test('dataLayerVariable maps to GTM "v" type and back', () => {
   const gtm = toGtmPayload('variable', 'form', { type: 'dataLayerVariable', variableName: 'form' });
@@ -418,4 +418,18 @@ test('consentInit trigger maps as a bare type', () => {
 
 test('unknown type throws rather than silently producing a bad payload', () => {
   assert.throws(() => toGtmPayload('tag', 'x', { type: 'somethingElse' }), /No GTM payload mapping/);
+});
+
+// `validate` rejects anything outside SUPPORTED_GTM_TYPES, so a name listed there but missing from
+// the dispatch would turn an offline error into an apply-time one.
+test('every type in SUPPORTED_GTM_TYPES has a payload mapping', () => {
+  for (const [kind, types] of Object.entries(SUPPORTED_GTM_TYPES)) {
+    for (const type of types) {
+      assert.doesNotThrow(
+        () => toGtmPayload(kind as 'variable' | 'trigger' | 'tag', 'x', { type }),
+        new RegExp('No GTM payload mapping'),
+        `${kind} type "${type}"`,
+      );
+    }
+  }
 });
