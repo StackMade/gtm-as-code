@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { confirm } from '../confirm.js';
+import { confirm, NEEDS_TERMINAL_HINT } from '../confirm.js';
 import { loadConfig } from '../../config/loader.js';
 import { interpolateConfig } from '../../config/interpolation.js';
 import { validateConfig, type AnalyticsConfig } from '../../config/schema.js';
@@ -59,7 +59,7 @@ async function adoptGtm(kind: GtmKind, id: string, config: AnalyticsConfig): Pro
 
   console.log(`About to stamp ownership on GTM ${kind} "${String(match.object.name)}" (id ${match.gtmId}) as "${id}".`);
   console.log("This writes to the live container's notes field only — no functional change to the object.\n");
-  if (!(await confirm())) {
+  if (!(await confirm(NEEDS_TERMINAL_HINT))) {
     console.log('Cancelled.');
     return;
   }
@@ -82,7 +82,7 @@ async function adoptGa4(kind: Ga4Kind, id: string, config: AnalyticsConfig): Pro
   }
 
   console.log(`About to record "${id}" (${name}) as managed in .analytics/state.json.\n`);
-  if (!(await confirm())) {
+  if (!(await confirm(NEEDS_TERMINAL_HINT))) {
     console.log('Cancelled.');
     return;
   }

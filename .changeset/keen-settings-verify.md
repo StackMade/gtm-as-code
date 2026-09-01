@@ -10,8 +10,8 @@ Closes the two ways a GA4 write could fail quietly.
   create/delete lifecycle to fall back on, so the only previous symptom was the next `plan` showing
   the same update again. A mismatch is now named field by field and `apply` exits non-zero, which
   makes the "run `plan` twice around every `apply`" habit unnecessary.
-- `plan` refuses to plan the delete of a key event GA4 reports as not deletable, which is how it
-  marks the default key events a property is created with. Dropping one from config used to produce
-  a `- delete` that failed with `INVALID_ARGUMENT` part-way through every `apply`; it now fails
+- `plan` refuses to plan the delete of a key event GA4 reports as `deletable: false`, usually one of
+  the default key events a property arrives with. Dropping it from config used to produce a
+  `- delete` that failed with `INVALID_ARGUMENT` part-way through every `apply`; it now fails
   offline of the write, naming the key event and both ways out (leave it declared, or unmark it in
   the GA4 UI).

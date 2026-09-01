@@ -69,10 +69,10 @@ ga4:
 
 `analytics/.env.analytics.example` holds the IDs you gave `init`. Copy it to
 `analytics/.env.analytics` (gitignored, see [State](#state)) with your real values, or set the same
-variables in your CI environment. Every command picks that file up on its own, from
-`analytics/.env.analytics` or `.env.analytics` in the working directory; `--env <path>` points at a
-different one. A variable already set in the environment always wins over the file, so a CI
-`env:` block is never overridden by a stray checkout.
+variables in your CI environment. Every command picks that file up on its own: `.env.analytics`
+first, then `analytics/.env.analytics`, both relative to the working directory, and `--env <path>`
+points at a different one. A variable already set in the environment always wins over the file, so a
+CI `env:` block is never overridden by a stray checkout.
 
 Check the config offline, no Google credentials required:
 
@@ -252,8 +252,8 @@ ga4:
       # measurementUnit optional
   keyEvents:
     <name>: { protected: boolean }
-      # a default key event GA4 created itself cannot be deleted through the API; plan says so
-      # rather than planning a delete that fails
+      # a key event the API reports as not deletable fails plan, rather than being planned
+      # as a delete that the API then rejects
   streamWebsiteUrl: string
     # the web data stream these stream-scoped settings apply to, looked up by URL, never created
   dataRetention: TWO_MONTHS | FOURTEEN_MONTHS | TWENTY_SIX_MONTHS | THIRTY_EIGHT_MONTHS | FIFTY_MONTHS
@@ -341,8 +341,8 @@ ga4:
 On `gtm.variables`, `gtm.triggers` and `gtm.tags` entries, `validate` checks `type` against the
 types this tool can actually build a GTM payload for, and suggests the nearest name when it doesn't
 recognize one, so an unsupported or misspelled type fails offline rather than part-way through an
-`apply`. For tags it also checks `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`. Per-resource-type
-property shapes aren't validated yet: a `dataLayerVariable` missing its `variableName` still gets as
+`apply`. For tags it also checks `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`.
+Per-resource-type property shapes aren't validated yet: a `dataLayerVariable` missing its `variableName` still gets as
 far as the API.
 
 `gtm.builtInVariables` is enable-only: `plan`/`drift` report a name listed but not yet enabled
@@ -366,9 +366,10 @@ declared value against GA4's live property/stream state and report a difference 
 some of these writes with a `200` that changes nothing on the property, so a mismatch is reported by
 name and `apply` exits non-zero: everything else in the run applied, but a value GA4 refuses to set
 would otherwise show up as the same pending update in every later `plan`. Drop such a field from
-config, or set it through the GA4 UI where it belongs. A setting left out of config is never touched, so enabling one by hand in the
-GA4 UI is never reported as drift. `dataRetention`, `googleSignals` and `attributionSettings` are
-property-level and apply regardless of `streamWebsiteUrl`; `enhancedMeasurement` is scoped to the
+config, or set it through the GA4 UI where it belongs. A setting left out of config is never
+touched, so enabling one by hand in the GA4 UI is never reported as drift. `dataRetention`,
+`googleSignals` and `attributionSettings` are property-level and apply regardless of
+`streamWebsiteUrl`; `enhancedMeasurement` is scoped to the
 stream `streamWebsiteUrl` resolves to, so it requires that field. `googleSignals`,
 `attributionSettings` and `enhancedMeasurement` live under the GA4 Admin API's `v1alpha`, not
 `v1beta` like everything else this tool touches, since GA4 hasn't promoted them to `v1beta` yet;
@@ -534,11 +535,12 @@ riding along with it. This applies to GA4 deletes too, even though a GA4 custom 
 is archived rather than hard-deleted (key events are hard-deleted); `plan` prints all three as
 `- delete`, so `apply` treats them the same way for this gate.
 
-One GA4 delete never gets that far: a key event the Admin API reports as not deletable, which is how
-it marks the default key events a property is created with. Removing one from config fails `plan`
-with a message naming it, instead of failing part-way through `apply` on every run. Either leave the
-entry declared, which costs nothing when the event never fires, or unmark it as a key event in the
-GA4 UI first so the config change has nothing left to delete.
+One GA4 delete never gets that far: a key event the Admin API reports as `deletable: false`.
+Removing that one from config fails `plan` with a message naming it, instead of failing part-way
+through `apply` on every run. Either leave the entry declared, which costs nothing when the event
+never fires, or unmark it as a key event in the GA4 UI first, so the config change has nothing left
+to delete. Default key events are the usual reason the API refuses a delete, but `plan` goes by the
+flag, not by where the event came from.
 
 A resource marked `protected: true` in config needs `--allow-destroy-protected` on top of
 `--allow-destroy` before `apply` deletes it, even if `--allow-destroy` alone would otherwise cover
@@ -599,7 +601,8 @@ treating it as managed. It's the one write in an otherwise read-only pull/adopt 
 (`folder`/`variable`/`trigger`/`tag`) it re-submits the matching live object with an ownership marker
 in its `notes` field, with no functional change to the object itself. For GA4 kinds
 (`dimension`/`metric`/`keyEvent`) it records the resource as managed in `.analytics/state.json`
-instead, with no live write. Prompts `Continue? [y/N]` before writing either way.
+instead, with no live write. Prompts `Continue? [y/N]` before writing either way, and there is no
+flag to skip that: with no terminal attached, `adopt` says so and stops.
 
 ## State
 
@@ -611,10 +614,11 @@ touched or deleted.
 
 `apply` holds an exclusive lock (`.analytics/state.json.lock`) for the duration of the run. Two
 concurrent `apply`s against the same state file can't interleave writes: the second one fails fast
-with a clear error instead of corrupting the file. A run killed outright leaves its lock behind; the
-next `apply` checks the pid recorded in it and takes the lock over when that process is gone. A pid
-only means something on the machine that wrote it, so a lock left by another host is reported instead
-of assumed stale, and deleting it by hand is then the right move. The state file also carries a `version` field. A version this
+with a clear error instead of corrupting the file. A run killed outright leaves its lock behind;
+the next `apply` checks the pid recorded in it and takes the lock over when that process is gone. A
+pid only means something on the machine that wrote it, so a lock left by another host is reported
+instead of assumed stale, and deleting it by hand is then the right move. The state file also
+carries a `version` field. A version this
 CLI doesn't understand fails `plan`/`apply` loudly instead of silently treating the state as empty.
 
 Don't hand-edit `.analytics/state.json`. **Commit it.** It holds no secrets, only resource ids, and
