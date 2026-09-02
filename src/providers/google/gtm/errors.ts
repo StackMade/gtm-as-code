@@ -47,6 +47,17 @@ export function extractApiStatus(error: unknown): string {
   return body?.error?.status ?? (error instanceof Error ? error.message : String(error));
 }
 
+/**
+ * Extracts Google's full error `message` (e.g. "Analytics Data API has not been used in project
+ * ... or it is disabled"), unlike `extractApiStatus` which only carries the short status enum.
+ * `doctor` needs this to tell "API disabled" apart from "permission denied" — both come back as
+ * the same `PERMISSION_DENIED` status.
+ */
+export function extractApiMessage(error: unknown): string {
+  const body = extractErrorBody(error);
+  return body?.error?.message ?? (error instanceof Error ? error.message : String(error));
+}
+
 function extractErrorBody(error: unknown): GoogleApiErrorBody | null {
   if (typeof error === 'object' && error !== null) {
     const candidate = error as { response?: { data?: unknown }; code?: number; message?: string };

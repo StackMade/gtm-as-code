@@ -362,10 +362,18 @@ data is. Moved ahead of environments/scale: it is a correctness gate, the same c
 not breadth, and this roadmap orders correctness gates before breadth on principle. Nothing in it
 depends on multi-environment or multi-container support existing first.
 
+Shipped 2026-09-02, build/lint/test clean, but not yet live-verified against a real GA4 property —
+unlike every other milestone above, which only got marked `Done` after that. Not calling this one
+`Done` until the GA4 Data API `runReport` call (dimension names, `dimensionFilter`,
+`returnPropertyQuota`) has actually been confirmed against a live response.
+
 - `gtm-code verify`. Query the GA4 Data API for the declared events over the last N days and report
   which ones have never been received, or are missing declared parameters. It needs a different API
   and scope than the Admin API work above, hence its own milestone. This is the check the GTM UI
-  cannot give you: config can be perfect while the site never fires the event.
+  cannot give you: config can be perfect while the site never fires the event. Parameter checking is
+  limited to `dimension: true` parameters — the Data API has no way to query an event parameter that
+  isn't registered as a GA4 custom dimension; unregistered parameters are reported as unverifiable
+  rather than silently skipped.
 - `gtm-code doctor`. Check credentials, API enablement, granted scopes, and quota headroom, and
   explain what's missing instead of failing mid-run.
 
