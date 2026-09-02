@@ -15,6 +15,8 @@ import { pull } from './commands/pull.js';
 import { adopt } from './commands/adopt.js';
 import { docs } from './commands/docs.js';
 import { generate } from './commands/generate.js';
+import { verify } from './commands/verify.js';
+import { doctor } from './commands/doctor.js';
 import type { GlobalOptions } from './options.js';
 
 // package.json is the only place the version is written down; `npm version` bumps it there.
@@ -148,6 +150,22 @@ program
   .action(function (this: Command) {
     const opts = this.opts<{ out?: string }>();
     generate({ ...globalOptions(this), out: opts.out });
+  });
+
+program
+  .command('verify')
+  .description('query the GA4 Data API for declared events actually received, and flag ones GTM never sent (exit 1 if it finds a problem)')
+  .option('--days <n>', 'how many trailing days to check', '28')
+  .action(async function (this: Command) {
+    const opts = this.opts<{ days: string }>();
+    await verify({ ...globalOptions(this), days: opts.days });
+  });
+
+program
+  .command('doctor')
+  .description('check credentials, API enablement, and GA4 Data API quota headroom, explaining what is missing')
+  .action(async function (this: Command) {
+    await doctor(globalOptions(this));
   });
 
 await program.parseAsync();

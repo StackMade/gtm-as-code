@@ -1,6 +1,6 @@
-import { extractApiStatus } from '../gtm/errors.js';
+import { extractApiStatus, extractApiMessage } from '../gtm/errors.js';
 
-export { extractApiStatus };
+export { extractApiStatus, extractApiMessage };
 
 /** Actionable API-failure messages. */
 export class Ga4ApiError extends Error {

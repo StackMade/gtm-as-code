@@ -480,7 +480,7 @@ Global flags, available on every command:
 | `--env <path>` | Load environment variables from this file (default: `.env.analytics` or `analytics/.env.analytics`, if present). Values already in the environment are not overwritten. Named `--env`, not `--env-file`, because Node claims that one: it scans the whole command line for `--env-file` and exits before this CLI starts if the path is missing |
 | `-v, --verbose` | Verbose output |
 | `-q, --quiet` | Suppress non-error output |
-| `-f, --format <type>` | `text`, `json`, or `markdown`. `plan` supports all three; other commands ignore it and print `text` |
+| `-f, --format <type>` | `text`, `json`, or `markdown`. `plan`/`diff`/`drift`/`verify`/`doctor` support all three; other commands ignore it and print `text` |
 
 ### `gtm-code init`
 
@@ -603,6 +603,25 @@ in its `notes` field, with no functional change to the object itself. For GA4 ki
 (`dimension`/`metric`/`keyEvent`) it records the resource as managed in `.analytics/state.json`
 instead, with no live write. Prompts `Continue? [y/N]` before writing either way, and there is no
 flag to skip that: with no terminal attached, `adopt` says so and stops.
+
+### `gtm-code verify [--days <n>] [--format json|markdown]`
+
+The check `plan`/`drift` can't give you: config can match GTM/GA4 exactly while the site never
+actually fires an event. Queries the GA4 **Data** API (not the Admin API the rest of this tool
+uses) for every event `events:` declares, over the trailing `--days` (default 28), and reports
+which ones were never received. For a received event's `dimension: true` parameters it also checks
+whether GA4 ever recorded a non-empty value; parameters not registered as a custom dimension can't
+be checked this way (the Data API has no way to query an arbitrary event parameter) and are
+reported separately rather than silently skipped. Read-only; requires `analytics.readonly`. Exit
+code `1` if any declared event was never received or a checked parameter never had a value, `0`
+otherwise.
+
+### `gtm-code doctor [--format json|markdown]`
+
+Checks credentials, then whether the GTM and GA4 Admin/Data APIs are reachable with the current
+config and grants, and GA4 Data API quota headroom, explaining what's missing instead of `plan`/
+`apply` failing mid-run with a raw Google error. Each check after config/credentials runs
+independently — one failing check doesn't stop the rest. Exit code `1` if any check fails.
 
 ## State
 
@@ -735,13 +754,12 @@ GA4 ownership tracking works in CI as long as `.analytics/state.json` is committ
 
 Not available yet. These are known gaps, so please don't file a bug for them:
 
-- `gtm-code verify`, `gtm-code docs`, `gtm-code doctor`
-- `gtm-code generate` (typed event helpers)
 - `gtm-code migrate`
 - GTM custom templates; conversion linker and community-gallery template tags (their payloads need
   fields, like Floodlight ids or a gallery template's own parameter schema, this tool can't
   live-verify against a sandbox container). See [Schema](#schema) for what is covered
-- GA4 data streams, enhanced measurement, audiences, and property settings
+- Multi-environment / multi-container / multi-property config, and access-as-code (GTM/GA4
+  permissions)
 
 There is deliberately no `action.yml` in this repository. The GitHub Action ships from
 [StackMade/gtm-as-code-action](https://github.com/StackMade/gtm-as-code-action) so that its version
