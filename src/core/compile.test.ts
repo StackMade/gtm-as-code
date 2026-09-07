@@ -11,7 +11,7 @@ function baseConfig(overrides: Partial<AnalyticsConfig>): AnalyticsConfig {
     project: { name: 'test' },
     google: { gtm: { accountId: '1', containerId: '1' }, ga4: { propertyId: '1' } },
     events: {},
-    gtm: { variables: {}, triggers: {}, tags: {}, folders: {}, builtInVariables: [] },
+    gtm: { variables: {}, triggers: {}, tags: {}, folders: {}, builtInVariables: [], environments: {} },
     ga4: { dimensions: {}, metrics: {}, keyEvents: {}, audiences: {}, eventCreateRules: {}, eventEditRules: {}, calculatedMetrics: {}, channelGroups: {}, measurementProtocolSecrets: {}, },
     ...overrides,
   };
@@ -72,6 +72,7 @@ test('explicit gtm primitive with the same id as a derived one wins (escape hatc
       tags: {},
       folders: {},
       builtInVariables: [],
+      environments: {},
     },
   });
 

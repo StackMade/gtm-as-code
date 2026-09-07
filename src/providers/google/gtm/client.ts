@@ -18,22 +18,30 @@ export interface GtmVersionRef {
   notes?: string;
 }
 
+/**
+ * `scope` is where a kind's collection hangs: everything a workspace can stage lives under the
+ * workspace, but an environment is container-level and has no workspace draft, so it is written
+ * live. `ownershipField` is the free-text field the ownership stamp goes into; environments have no
+ * `notes`, and their `description` is the only writable text on the object (both confirmed live
+ * 2026-09-07 against the sandbox container).
+ */
 const KINDS = {
-  folder: { collection: 'folders', field: 'folder', idField: 'folderId', type: 'gtm.folder' },
-  variable: { collection: 'variables', field: 'variable', idField: 'variableId', type: 'gtm.variable' },
-  trigger: { collection: 'triggers', field: 'trigger', idField: 'triggerId', type: 'gtm.trigger' },
-  tag: { collection: 'tags', field: 'tag', idField: 'tagId', type: 'gtm.tag' },
+  folder: { collection: 'folders', field: 'folder', idField: 'folderId', type: 'gtm.folder', scope: 'workspace', ownershipField: 'notes' },
+  variable: { collection: 'variables', field: 'variable', idField: 'variableId', type: 'gtm.variable', scope: 'workspace', ownershipField: 'notes' },
+  trigger: { collection: 'triggers', field: 'trigger', idField: 'triggerId', type: 'gtm.trigger', scope: 'workspace', ownershipField: 'notes' },
+  tag: { collection: 'tags', field: 'tag', idField: 'tagId', type: 'gtm.tag', scope: 'workspace', ownershipField: 'notes' },
+  environment: { collection: 'environments', field: 'environment', idField: 'environmentId', type: 'gtm.environment', scope: 'container', ownershipField: 'description' },
 } as const;
 
 export type GtmKind = keyof typeof KINDS;
 
-/** GTM's own id field name for a kind's objects (`folderId`/`variableId`/`triggerId`/`tagId`). */
-export function gtmIdField(kind: GtmKind): 'folderId' | 'variableId' | 'triggerId' | 'tagId' {
+/** GTM's own id field name for a kind's objects (`folderId`/`variableId`/`triggerId`/`tagId`/`environmentId`). */
+export function gtmIdField(kind: GtmKind): 'folderId' | 'variableId' | 'triggerId' | 'tagId' | 'environmentId' {
   return KINDS[kind].idField;
 }
 
-/** A GTM API variable/trigger/tag payload, as GTM itself represents it. */
-export type GtmObject = Record<string, unknown> & { notes?: string };
+/** A GTM API variable/trigger/tag/environment payload, as GTM itself represents it. */
+export type GtmObject = Record<string, unknown> & { notes?: string; description?: string };
 
 type GtmListResponse = Record<string, unknown> & { nextPageToken?: string };
 
@@ -82,7 +90,15 @@ export class GtmClient {
 
   private collectionUrl(kind: GtmKind): string {
     const { accountId, containerId, workspaceId } = this.ref;
-    return `${BASE_URL}/accounts/${accountId}/containers/${containerId}/workspaces/${workspaceId}/${KINDS[kind].collection}`;
+    const container = `${BASE_URL}/accounts/${accountId}/containers/${containerId}`;
+    return KINDS[kind].scope === 'container'
+      ? `${container}/${KINDS[kind].collection}`
+      : `${container}/workspaces/${workspaceId}/${KINDS[kind].collection}`;
+  }
+
+  /** The free-text field this kind stamps ownership into. */
+  private ownershipTextOf(kind: GtmKind, object: GtmObject): string | undefined {
+    return object[KINDS[kind].ownershipField] as string | undefined;
   }
 
   /**
@@ -113,7 +129,7 @@ export class GtmClient {
     const objects = await this.list(kind);
     const resources: Resource[] = [];
     for (const object of objects) {
-      const ownership = parseOwnershipNotes(object.notes);
+      const ownership = parseOwnershipNotes(this.ownershipTextOf(kind, object));
       if (!ownership) continue;
       const desiredState = ownership.protected ? { ...object, __protected: true } : object;
       resources.push({ id: ownership.resourceId, type: KINDS[kind].type, provider: 'google', desiredState });
@@ -123,7 +139,8 @@ export class GtmClient {
 
   /** Creates a GTM object, stamping it with ownership metadata for `resourceId`. */
   async create(kind: GtmKind, resourceId: string, payload: GtmObject, isProtected?: boolean): Promise<GtmObject> {
-    const body = { ...payload, notes: buildOwnershipNotes(resourceId, isProtected, payload.notes) };
+    const field = KINDS[kind].ownershipField;
+    const body = { ...payload, [field]: buildOwnershipNotes(resourceId, isProtected, this.ownershipTextOf(kind, payload)) };
     try {
       const response = await this.auth.request<GtmObject>({ url: this.collectionUrl(kind), method: 'POST', data: body });
       return response.data;
@@ -146,8 +163,9 @@ export class GtmClient {
     isProtected?: boolean,
     existingNotes?: string,
   ): Promise<GtmObject> {
-    const userNotes = payload.notes ?? extractUserNotes(existingNotes);
-    const body = { ...payload, notes: buildOwnershipNotes(resourceId, isProtected, userNotes) };
+    const field = KINDS[kind].ownershipField;
+    const userNotes = this.ownershipTextOf(kind, payload) ?? extractUserNotes(existingNotes);
+    const body = { ...payload, [field]: buildOwnershipNotes(resourceId, isProtected, userNotes) };
     try {
       const response = await this.auth.request<GtmObject>({
         url: `${this.collectionUrl(kind)}/${gtmId}`,

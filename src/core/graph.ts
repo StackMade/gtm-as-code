@@ -7,7 +7,7 @@ export class CircularDependencyError extends Error {
   }
 }
 
-type Category = 'variable' | 'trigger' | 'tag' | 'folder';
+type Category = 'variable' | 'trigger' | 'tag' | 'folder' | 'environment';
 
 function nodeId(category: Category, id: string): string {
   return `${category}:${id}`;
@@ -85,6 +85,13 @@ export function buildDependencyGraph(config: AnalyticsConfig): DependencyGraph {
 
   for (const id of Object.keys(config.gtm.folders)) {
     graph.addNode(nodeId('folder', id));
+  }
+
+  // Container-level, and referenced by nothing: an environment has no edges. It still has to be a
+  // node, because `apply` creates resources in this graph's order and anything missing from it is
+  // never created at all.
+  for (const id of Object.keys(config.gtm.environments)) {
+    graph.addNode(nodeId('environment', id));
   }
 
   for (const [id, variable] of Object.entries(config.gtm.variables)) {

@@ -102,7 +102,7 @@ export function compileEvents(
 
   return {
     ...config,
-    gtm: { variables, triggers, tags, folders: config.gtm.folders, builtInVariables: config.gtm.builtInVariables },
+    gtm: { ...config.gtm, variables, triggers, tags },
     ga4: { ...config.ga4, dimensions, keyEvents },
   };
 }
@@ -129,6 +129,7 @@ export function toResources(config: AnalyticsConfig): Resource[] {
   for (const [id, def] of Object.entries(config.gtm.variables)) push(id, 'gtm.variable', def);
   for (const [id, def] of Object.entries(config.gtm.triggers)) push(id, 'gtm.trigger', def);
   for (const [id, def] of Object.entries(config.gtm.tags)) push(id, 'gtm.tag', def);
+  for (const [id, def] of Object.entries(config.gtm.environments)) push(id, 'gtm.environment', def);
   for (const [id, def] of Object.entries(config.ga4.dimensions)) push(id, 'ga4.dimension', def);
   for (const [id, def] of Object.entries(config.ga4.metrics)) push(id, 'ga4.metric', def);
   for (const [id, def] of Object.entries(config.ga4.keyEvents)) push(id, 'ga4.keyEvent', def);

@@ -135,6 +135,15 @@ export function toGtmPayload(
     return { name: resourceId };
   }
 
+  if (kind === 'environment') {
+    // GTM's own container-level environment. `description` is deliberately absent: the client
+    // stamps ownership into it, the way `notes` carries it for every other kind.
+    const payload: GtmObject = { name: resourceId };
+    if (desiredState.url !== undefined) payload.url = String(desiredState.url);
+    if (desiredState.enableDebug !== undefined) payload.enableDebug = desiredState.enableDebug === true;
+    return payload;
+  }
+
   let payload = toGtmPayloadByType(kind, resourceId, desiredState, context);
   if (kind === 'tag') payload = { ...payload, ...resolveTagFiringBehavior(desiredState) };
   const folder = desiredState.folder as string | undefined;
@@ -358,6 +367,13 @@ export interface ReverseMappingContext {
 export function fromGtmPayload(kind: GtmKind, object: GtmObject, context: ReverseMappingContext = {}): Record<string, unknown> {
   if (kind === 'folder') {
     return { name: object.name };
+  }
+
+  if (kind === 'environment') {
+    // `enableDebug: false` comes back absent, not `false`: proto3 JSON omits a false boolean. Read
+    // the absence as `false` rather than `undefined`, or a config that declares it false compares
+    // unequal to the live value forever, which is the phantom-diff bug 0.8.2 fixed for GA4.
+    return { url: object.url, enableDebug: object.enableDebug === true };
   }
 
   let desiredState = fromGtmPayloadByType(kind, object, context);

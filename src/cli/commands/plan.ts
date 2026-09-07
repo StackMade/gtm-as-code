@@ -17,7 +17,7 @@ import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
 import type { AnalyticsConfig } from '../../config/schema.js';
 
-const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
+const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag', 'environment'];
 const GA4_KINDS: Ga4Kind[] = [
   'dimension',
   'metric',
@@ -34,6 +34,7 @@ const GA4_STREAM_SCOPED_KINDS: ReadonlySet<Ga4Kind> = new Set(['eventCreateRule'
 
 const KIND_LABEL: Record<string, string> = {
   'gtm.folder': 'folder',
+  'gtm.environment': 'environment',
   'gtm.variable': 'variable',
   'gtm.trigger': 'trigger',
   'gtm.tag': 'tag',

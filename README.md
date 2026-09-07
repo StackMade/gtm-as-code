@@ -189,6 +189,30 @@ override an event in your own config to change that, root always wins.
 extends: ./node_modules/@stackmade/gtm-as-code/packs/ecommerce.yaml
 ```
 
+### GTM environments
+
+GTM's own environment objects, the ones that give a staging site its `gtm_auth`/`gtm_preview`
+snippet. They are container-level rather than workspace-level, so `apply` writes them live instead
+of staging them into the workspace `publish` later publishes:
+
+```yaml
+gtm:
+  environments:
+    staging:
+      url: "https://staging.example.com"
+      enableDebug: true
+    qa:
+      url: "https://qa.example.com"
+```
+
+The config key is the environment's name in GTM. Ownership is stamped into the object's
+`description`, because a GTM environment has no `notes` field; that also means `description` is not
+configurable, the same way `notes` is not for a tag. GTM's own built-in `Live` and `Latest`
+environments carry no stamp, so this tool never lists, updates or deletes them.
+
+This is separate from the config-level `environments:` block below, which is about which container
+a run targets. The two are unrelated and can be used together or apart.
+
 ### Environments
 
 One tracking plan, several places to apply it. An `environments:` block declares named sets of
@@ -291,6 +315,8 @@ events:
 
 gtm:
   builtInVariables: [string, ...]  # optional, GTM display names e.g. "Click Text", "Page Path"
+  environments:
+    <name>: { url: string, enableDebug: boolean, protected: boolean }
   folders:
     <name>: {}
   variables:

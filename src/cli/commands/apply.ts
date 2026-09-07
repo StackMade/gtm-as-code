@@ -15,7 +15,11 @@ import { WorkspaceConflictError } from '../../providers/google/gtm/errors.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
 
-const GTM_KIND_ORDER: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
+// Environments reference nothing in the container and nothing references them, so they sit at the
+// end of the create order and, reversed, at the front of the delete order. Either position is
+// equally correct; last keeps them out of the way of the tag/trigger/variable chain that does have
+// ordering constraints.
+const GTM_KIND_ORDER: GtmKind[] = ['folder', 'variable', 'trigger', 'tag', 'environment'];
 const GA4_UPDATE_MASK: Record<Ga4Kind, string[]> = {
   dimension: ['displayName'],
   metric: ['displayName'],
@@ -179,6 +183,17 @@ async function execute(result: PlanResult): Promise<void> {
   const createsById = new Map(
     changes.filter(isCreate).filter((c) => c.resource.type.startsWith('gtm.')).map((c) => [`${c.resource.type.split('.')[1]}:${c.resource.id}`, c]),
   );
+  // A GTM resource kind that is not a node in the dependency graph would be silently skipped here
+  // and `apply` would still report success, which is the worst shape a bug in this tool can take.
+  const unordered = [...createsById.keys()].filter((key) => !order.includes(key));
+  if (unordered.length > 0) {
+    throw new Error(
+      `apply built a plan containing GTM resources the dependency graph does not order: ${unordered.join(', ')}. ` +
+        'This is a bug in gtm-as-code, not in the config: creating them would depend on an order nothing computed. ' +
+        'Nothing was created for them; report this with the resource kinds named above.',
+    );
+  }
+
   for (const node of order) {
     const change = createsById.get(node);
     if (!change) continue;
@@ -236,7 +251,7 @@ async function execute(result: PlanResult): Promise<void> {
 }
 
 function groupGtm(changes: Change[]): Record<GtmKind, Change[]> {
-  const groups: Record<GtmKind, Change[]> = { folder: [], variable: [], trigger: [], tag: [] };
+  const groups: Record<GtmKind, Change[]> = { folder: [], variable: [], trigger: [], tag: [], environment: [] };
   for (const change of changes) {
     const type = resourceOf(change).type;
     if (!type.startsWith('gtm.')) continue;

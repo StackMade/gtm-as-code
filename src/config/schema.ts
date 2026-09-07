@@ -211,6 +211,15 @@ export interface ChannelGroupDef {
   protected?: boolean;
 }
 
+/** A GTM environment. The config key is its GTM name; `description` holds ownership, not user text. */
+export interface GtmEnvironmentDef {
+  /** The site this environment previews, GTM's `url`. */
+  url?: string;
+  /** GTM's `enableDebug`: whether the environment's snippet opens in preview mode. Always set. */
+  enableDebug: boolean;
+  protected?: boolean;
+}
+
 export interface AnalyticsConfig {
   version: 1;
   project: { name: string };
@@ -225,6 +234,7 @@ export interface AnalyticsConfig {
     tags: Record<string, TagDef>;
     folders: Record<string, unknown>;
     builtInVariables: string[];
+    environments: Record<string, GtmEnvironmentDef>;
   };
   ga4: {
     dimensions: Record<string, DimensionDef>;
@@ -481,14 +491,51 @@ function validateParameters(
 
 function validateGtm(parsed: ParsedConfig, raw: unknown): AnalyticsConfig['gtm'] {
   const container = requireObject(parsed, raw, ['gtm']);
-  checkUnknownKeys(parsed, container, ['variables', 'triggers', 'tags', 'folders', 'builtInVariables'], ['gtm']);
+  checkUnknownKeys(parsed, container, ['variables', 'triggers', 'tags', 'folders', 'builtInVariables', 'environments'], ['gtm']);
   return {
     variables: validateResourceMap(parsed, 'variable', container.variables ?? {}, ['gtm', 'variables']),
     triggers: validateResourceMap(parsed, 'trigger', container.triggers ?? {}, ['gtm', 'triggers']),
     tags: validateTagMap(parsed, container.tags ?? {}, ['gtm', 'tags']),
     folders: requireObject(parsed, container.folders ?? {}, ['gtm', 'folders']),
     builtInVariables: validateBuiltInVariables(parsed, container.builtInVariables ?? [], ['gtm', 'builtInVariables']),
+    environments: validateGtmEnvironments(parsed, container.environments ?? {}, ['gtm', 'environments']),
   };
+}
+
+const GTM_ENVIRONMENT_KEYS = ['url', 'enableDebug', 'protected'];
+
+/**
+ * GTM's own environment objects, which are container-level rather than workspace-level. The config
+ * key is the environment's GTM name, as it is for folders. `description` is not configurable: it is
+ * where the ownership stamp lives for this kind, the way `notes` does for everything else.
+ */
+function validateGtmEnvironments(
+  parsed: ParsedConfig,
+  raw: unknown,
+  path: string[],
+): Record<string, GtmEnvironmentDef> {
+  const map = requireObject(parsed, raw, path);
+  const result: Record<string, GtmEnvironmentDef> = {};
+  for (const [name, value] of Object.entries(map)) {
+    const entry = requireObject(parsed, value, [...path, name]);
+    checkUnknownKeys(parsed, entry, GTM_ENVIRONMENT_KEYS, [...path, name]);
+    const url = entry.url !== undefined ? requireString(parsed, entry.url, [...path, name, 'url']) : undefined;
+    if (entry.enableDebug !== undefined && typeof entry.enableDebug !== 'boolean') {
+      fail(parsed, [...path, name, 'enableDebug'], [
+        { label: 'Expected', value: 'a boolean' },
+        { label: 'Received', value: describeType(entry.enableDebug) },
+      ]);
+    }
+    // Always a boolean, never absent: GTM omits `enableDebug` from a response when it is false
+    // (proto3 JSON), so the reverse mapper reads the absence as `false`. Leaving it undefined here
+    // would make an environment that never declares the field diff against `false` forever.
+    result[name] = {
+      url,
+      enableDebug: entry.enableDebug === true,
+      protected: entry.protected === true ? true : undefined,
+    };
+  }
+  return result;
 }
 
 function validateBuiltInVariables(parsed: ParsedConfig, raw: unknown, path: string[]): string[] {
