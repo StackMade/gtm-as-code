@@ -10,7 +10,7 @@ import type { GlobalOptions } from '../options.js';
 /** Creates a container version from the current workspace and publishes it, making `apply`'s changes live. */
 export async function publish(opts: GlobalOptions): Promise<void> {
   try {
-    const parsed = loadConfig(opts.config);
+    const parsed = loadConfig(opts.config, opts.env);
     const interpolated = { ...parsed, data: interpolateConfig(parsed) };
     const config = validateConfig(interpolated);
 

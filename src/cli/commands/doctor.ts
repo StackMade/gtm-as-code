@@ -43,7 +43,7 @@ export async function runDoctorChecks(opts: GlobalOptions): Promise<DoctorCheck[
 
   let config;
   try {
-    const parsed = loadConfig(opts.config);
+    const parsed = loadConfig(opts.config, opts.env);
     const interpolated = { ...parsed, data: interpolateConfig(parsed) };
     config = validateConfig(interpolated);
     checks.push({ name: 'config', status: 'ok', detail: parsed.file });

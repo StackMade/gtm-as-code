@@ -94,7 +94,7 @@ export async function pull(opts: PullOptions): Promise<void> {
  */
 async function pullFromExport(opts: PullOptions): Promise<void> {
   const configPath = resolveConfigPath(opts.config);
-  const parsed = loadConfig(opts.config);
+  const parsed = loadConfig(opts.config, opts.env);
   const raw = parsed.data as Record<string, unknown>;
 
   const outPath = opts.out ? resolve(process.cwd(), opts.out) : configPath;
@@ -158,7 +158,7 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
 
 async function pullAll(opts: PullOptions): Promise<void> {
   const configPath = resolveConfigPath(opts.config);
-  const parsed = loadConfig(opts.config);
+  const parsed = loadConfig(opts.config, opts.env);
   // The validated/interpolated config is only used to connect (resolved accountId etc.) —
   // the file we write is built from the raw parsed data, so `${GTM_ACCOUNT_ID}`-style
   // placeholders are never replaced with their resolved values on disk.
@@ -204,7 +204,7 @@ async function pullOne(opts: PullOptions): Promise<void> {
   const { kind, id } = parseResourceArg(opts.resource!);
 
   const configPath = resolveConfigPath(opts.config);
-  const parsed = loadConfig(opts.config);
+  const parsed = loadConfig(opts.config, opts.env);
   const config = validateConfig({ ...parsed, data: interpolateConfig(parsed) });
 
   const { gtm, ga4 } = await connect(config);

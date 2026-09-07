@@ -10,7 +10,7 @@ import type { GlobalOptions } from '../options.js';
 /** Republishes the container version that was live immediately before the current one. */
 export async function rollback(opts: GlobalOptions): Promise<void> {
   try {
-    const parsed = loadConfig(opts.config);
+    const parsed = loadConfig(opts.config, opts.env);
     const interpolated = { ...parsed, data: interpolateConfig(parsed) };
     const config = validateConfig(interpolated);
 

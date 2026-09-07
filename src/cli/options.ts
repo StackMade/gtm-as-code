@@ -3,7 +3,9 @@ export interface GlobalOptions {
   quiet: boolean;
   format: 'text' | 'json' | 'markdown';
   config?: string;
-  /** `--env <path>`: an env file to load before the config is interpolated. */
+  /** `--dotenv <path>`: an env file to load before the config is interpolated. */
+  dotenv?: string;
+  /** `--env <name>`: which entry of the config's `environments:` block to use. */
   env?: string;
   autoApprove?: boolean;
   allowDestroy?: boolean;

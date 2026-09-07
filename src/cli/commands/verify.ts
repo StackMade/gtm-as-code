@@ -84,7 +84,7 @@ export function classifyEvent(eventId: string, event: EventDef, eventCount: numb
 
 export async function computeVerifyReport(opts: VerifyCommandOptions): Promise<VerifyReport> {
   const days = opts.days ? Number(opts.days) : DEFAULT_DAYS;
-  const parsed = loadConfig(opts.config);
+  const parsed = loadConfig(opts.config, opts.env);
   const interpolated = { ...parsed, data: interpolateConfig(parsed) };
   const config = validateConfig(interpolated);
   const compiled = compileEvents(config, parsed.file);

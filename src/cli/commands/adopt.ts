@@ -20,7 +20,7 @@ import type { GlobalOptions } from '../options.js';
 export async function adopt(resourceArg: string, opts: GlobalOptions): Promise<void> {
   try {
     const { kind, id } = parseResourceArg(resourceArg);
-    const parsed = loadConfig(opts.config);
+    const parsed = loadConfig(opts.config, opts.env);
     const config = validateConfig({ ...parsed, data: interpolateConfig(parsed) });
 
     if (kind === 'folder' || kind === 'variable' || kind === 'trigger' || kind === 'tag') await adoptGtm(kind, id, config);

@@ -32,9 +32,9 @@ export interface DiffResult {
  * same load → interpolate → validate → compile pipeline `plan` uses, then diffs the two
  * resource lists. `fileB` is "desired", `fileA` is the baseline it is compared against —
  * the result reads as "what would change going from fileA to fileB". */
-export function computeDiff(fileA: string, fileB: string): DiffResult {
+export function computeDiff(fileA: string, fileB: string, environment?: string): DiffResult {
   const resourcesOf = (path: string): Resource[] => {
-    const parsed = loadConfig(path);
+    const parsed = loadConfig(path, environment);
     const interpolated = { ...parsed, data: interpolateConfig(parsed) };
     const config = validateConfig(interpolated);
     const compiled = compileEvents(config, parsed.file);
@@ -53,7 +53,7 @@ export function computeDiff(fileA: string, fileB: string): DiffResult {
 
 export async function diff(fileA: string, fileB: string, opts: GlobalOptions): Promise<void> {
   try {
-    const result = computeDiff(fileA, fileB);
+    const result = computeDiff(fileA, fileB, opts.env);
     render(result, opts.format);
     if (result.changes.length > 0) process.exitCode = 2;
   } catch (error) {

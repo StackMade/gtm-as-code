@@ -117,3 +117,92 @@ test('a config with no extends: is unaffected (no origins map, unchanged data)',
   const parsed = loadConfig(join(dir, 'analytics.yaml'));
   assert.equal(parsed.origins, undefined);
 });
+
+const ENVIRONMENTS_BLOCK = `environments:
+  staging:
+    google:
+      gtm:
+        containerId: "222"
+      ga4:
+        propertyId: "22"
+    ga4:
+      streamWebsiteUrl: "https://staging.example.com"
+  production:
+    google:
+      gtm:
+        containerId: "333"
+      ga4:
+        propertyId: "33"
+`;
+
+function withEnvironments(dir: string, block: string = ENVIRONMENTS_BLOCK): string {
+  const file = join(dir, 'analytics.yaml');
+  writeFileSync(file, `${ROOT_HEADER}${block}`);
+  return file;
+}
+
+test('loadConfig merges the selected environment over the root config and drops the block', () => {
+  const file = withEnvironments(tempDir());
+
+  const parsed = loadConfig(file, 'staging');
+  const data = parsed.data as {
+    google: { gtm: { accountId: string; containerId: string }; ga4: { propertyId: string } };
+    ga4: { streamWebsiteUrl: string };
+    environments?: unknown;
+  };
+
+  assert.equal(data.google.gtm.containerId, '222');
+  assert.equal(data.google.ga4.propertyId, '22');
+  assert.equal(data.ga4.streamWebsiteUrl, 'https://staging.example.com');
+  // Untouched by the environment, so it still comes from the root.
+  assert.equal(data.google.gtm.accountId, '1');
+  assert.equal(data.environments, undefined);
+});
+
+test('loadConfig leaves the root config alone when a different environment is selected', () => {
+  const file = withEnvironments(tempDir());
+
+  const production = loadConfig(file, 'production').data as {
+    google: { gtm: { containerId: string } };
+    ga4?: { streamWebsiteUrl?: string };
+  };
+
+  assert.equal(production.google.gtm.containerId, '333');
+  // `staging` sets this and `production` does not, so selecting production must not inherit it.
+  assert.equal(production.ga4?.streamWebsiteUrl, undefined);
+});
+
+test('loadConfig refuses to guess an environment and lists the declared ones', () => {
+  const file = withEnvironments(tempDir());
+
+  assert.throws(
+    () => loadConfig(file),
+    (error: unknown) => error instanceof ConfigError && /staging, production/.test(String(error.message ?? error)),
+  );
+});
+
+test('loadConfig names the declared environments when the selected one does not exist', () => {
+  const file = withEnvironments(tempDir());
+
+  assert.throws(
+    () => loadConfig(file, 'prod'),
+    (error: unknown) => error instanceof ConfigError && /staging, production/.test(String(error.message ?? error)),
+  );
+});
+
+test('loadConfig rejects an environment overriding something that is not per-environment', () => {
+  const file = withEnvironments(
+    tempDir(),
+    'environments:\n  staging:\n    events:\n      generate_lead:\n        parameters: {}\n',
+  );
+
+  assert.throws(() => loadConfig(file, 'staging'), ConfigError);
+});
+
+test('loadConfig rejects --env against a config with no environments block', () => {
+  const dir = tempDir();
+  const file = join(dir, 'analytics.yaml');
+  writeFileSync(file, ROOT_HEADER);
+
+  assert.throws(() => loadConfig(file, 'staging'), ConfigError);
+});

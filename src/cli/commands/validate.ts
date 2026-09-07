@@ -8,7 +8,7 @@ import type { GlobalOptions } from '../options.js';
 
 export function validate(opts: GlobalOptions): void {
   try {
-    const parsed = loadConfig(opts.config);
+    const parsed = loadConfig(opts.config, opts.env);
     const interpolated = { ...parsed, data: interpolateConfig(parsed) };
     const config = validateConfig(interpolated);
     compileEvents(config, parsed.file);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
-import { loadEnvFile } from '../config/env-file.js';
+import { checkEnvIsNotAPath, loadEnvFile } from '../config/env-file.js';
 import { printFailure } from './failure.js';
 import { init } from './commands/init.js';
 import { validate } from './commands/validate.js';
@@ -32,16 +32,19 @@ program
   .option('-q, --quiet', 'suppress non-error output', false)
   .option('-f, --format <type>', 'output format: text, json, markdown', 'text')
   .option('-c, --config <path>', 'path to the analytics config file')
-  .option('--env <path>', 'load environment variables from this file (default: .env.analytics or analytics/.env.analytics)');
+  .option('--dotenv <path>', 'load environment variables from this file (default: .env.analytics or analytics/.env.analytics)')
+  .option('-e, --env <name>', 'which entry of the config\'s `environments:` block to use');
 
 // Config interpolation reads `${GTM_ACCOUNT_ID}` and friends straight from `process.env`, so the env
 // file has to be in place before any command runs. `loadEnvFile` never overwrites a variable that is
-// already set, so a CI `env:` block still wins. The flag is `--env` rather than `--env-file`: Node
-// claims the latter for itself and rejects a missing path at startup, before this process runs.
+// already set, so a CI `env:` block still wins. The flag is `--dotenv` rather than `--env-file`: Node
+// claims the latter for itself and rejects a missing path at startup, before this process runs. It
+// was `--env` up to 0.8.4, which now selects an entry of the config's `environments:` block instead.
 program.hook('preAction', (_program, actionCommand) => {
-  const { env, verbose, quiet } = actionCommand.optsWithGlobals<GlobalOptions>();
+  const { dotenv, env, verbose, quiet } = actionCommand.optsWithGlobals<GlobalOptions>();
   try {
-    const loaded = loadEnvFile(env);
+    checkEnvIsNotAPath(env);
+    const loaded = loadEnvFile(dotenv);
     if (loaded && verbose && !quiet) console.log(`Loaded environment from ${loaded}`);
   } catch (error) {
     printFailure(error);

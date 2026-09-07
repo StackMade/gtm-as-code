@@ -86,7 +86,7 @@ export async function plan(opts: GlobalOptions): Promise<void> {
 
 /** `apply` passes edit scopes so it can reuse these clients without a second `authorize()`. */
 export async function computePlan(opts: GlobalOptions, scopes: string[]): Promise<PlanResult> {
-  const parsed = loadConfig(opts.config);
+  const parsed = loadConfig(opts.config, opts.env);
   const interpolated = { ...parsed, data: interpolateConfig(parsed) };
   const config = validateConfig(interpolated);
 

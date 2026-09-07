@@ -9,7 +9,7 @@ import type { GlobalOptions } from '../options.js';
 
 export function generate(opts: GlobalOptions & { out?: string }): void {
   try {
-    const parsed = loadConfig(opts.config);
+    const parsed = loadConfig(opts.config, opts.env);
     const interpolated = { ...parsed, data: interpolateConfig(parsed) };
     const config = validateConfig(interpolated);
     const compiled = compileEvents(config, parsed.file);

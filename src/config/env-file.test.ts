@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadEnvFile } from './env-file.js';
+import { checkEnvIsNotAPath, loadEnvFile } from './env-file.js';
 
 function fixture(files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), 'gtm-env-'));
@@ -43,4 +43,18 @@ test('returns undefined when there is nothing to load', () => {
 
 test('an explicit path that does not exist is an error naming it', () => {
   assert.throws(() => loadEnvFile('nope.env', fixture({})), /Env file not found: nope\.env/);
+});
+
+test('checkEnvIsNotAPath accepts an ordinary environment name', () => {
+  assert.doesNotThrow(() => checkEnvIsNotAPath('production'));
+  assert.doesNotThrow(() => checkEnvIsNotAPath(undefined));
+});
+
+test('checkEnvIsNotAPath rejects the pre-0.9 --env argument and names --dotenv', () => {
+  assert.throws(() => checkEnvIsNotAPath('analytics/.env.analytics'), /--dotenv analytics\/\.env\.analytics/);
+  assert.throws(() => checkEnvIsNotAPath('.env.analytics'), /--dotenv/);
+});
+
+test('checkEnvIsNotAPath rejects a bare name that happens to be a file that exists', () => {
+  assert.throws(() => checkEnvIsNotAPath('package.json'), /looks like a file path/);
 });

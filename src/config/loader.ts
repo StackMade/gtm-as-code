@@ -22,10 +22,15 @@ export function resolveConfigPath(configFlag?: string, cwd: string = process.cwd
   );
 }
 
-export function loadConfig(configFlag?: string, cwd: string = process.cwd()): ParsedConfig {
+/**
+ * `environment` is the `--env <name>` argument. It is resolved after `extends:` so a shared pack can
+ * be extended by every environment, and before validation so the rest of the pipeline never learns
+ * that environments exist: it sees one ordinary config with one container and one property.
+ */
+export function loadConfig(configFlag?: string, environment?: string, cwd: string = process.cwd()): ParsedConfig {
   const path = resolveConfigPath(configFlag, cwd);
   const source = readFileSync(path, 'utf8');
-  return resolveExtends(parseYaml(path, source), new Set([path]));
+  return applyEnvironment(resolveExtends(parseYaml(path, source), new Set([path])), environment);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -136,4 +141,92 @@ function resolveExtends(parsed: ParsedConfig, visited: Set<string>): ParsedConfi
   // already fall back to `parsed` (the root) for a path with no origins entry.
 
   return { ...parsed, data: merged, origins };
+}
+
+/** The only paths an `environments:` entry may set. Everything else is shared across environments,
+ *  which is the point of the block: one tracking plan, several places to apply it. */
+const ENVIRONMENT_OVERRIDABLE_PATHS: string[][] = [
+  ['google', 'gtm', 'accountId'],
+  ['google', 'gtm', 'containerId'],
+  ['google', 'gtm', 'workspace'],
+  ['google', 'ga4', 'propertyId'],
+  ['google', 'ga4', 'measurementId'],
+  ['ga4', 'streamWebsiteUrl'],
+];
+
+function environmentNames(environments: Record<string, unknown>): string {
+  const names = Object.keys(environments);
+  return names.length > 0 ? names.join(', ') : '(none declared)';
+}
+
+/**
+ * Every leaf path present in `body`, so an unsupported one can be named rather than ignored. An
+ * empty object counts as a leaf: `events: {generate_lead: {parameters: {}}}` otherwise yields no
+ * paths at all and slips past the overridable-path check with nothing to report.
+ */
+function leafPaths(body: Record<string, unknown>, prefix: string[] = []): string[][] {
+  const paths: string[][] = [];
+  for (const [key, value] of Object.entries(body)) {
+    if (isPlainObject(value) && Object.keys(value).length > 0) paths.push(...leafPaths(value, [...prefix, key]));
+    else paths.push([...prefix, key]);
+  }
+  return paths;
+}
+
+export function applyEnvironment(parsed: ParsedConfig, environment?: string): ParsedConfig {
+  const data = parsed.data;
+  if (!isPlainObject(data) || data.environments === undefined) {
+    if (environment !== undefined) {
+      throw new ConfigError(parsed.file, undefined, 'environments', [
+        { label: 'Expected', value: `an \`environments:\` block declaring "${environment}"` },
+        { label: 'Received', value: 'a config with no `environments:` block' },
+      ]);
+    }
+    return parsed;
+  }
+
+  const environments = data.environments;
+  if (!isPlainObject(environments)) {
+    throw new ConfigError(parsed.file, undefined, 'environments', [
+      { label: 'Expected', value: 'a map of environment name to its overrides' },
+    ]);
+  }
+
+  // Selection is never implicit. A config that declares environments is a config where "which
+  // container am I about to write to" has more than one answer, and guessing at it is how a staging
+  // apply reaches production.
+  if (environment === undefined) {
+    throw new ConfigError(parsed.file, undefined, 'environments', [
+      { label: 'Expected', value: '--env <name>, because this config declares environments' },
+      { label: 'Declared environments', value: environmentNames(environments) },
+    ]);
+  }
+
+  const body = environments[environment];
+  if (body === undefined) {
+    throw new ConfigError(parsed.file, undefined, `environments.${environment}`, [
+      { label: 'Expected', value: 'one of the declared environments' },
+      { label: 'Declared environments', value: environmentNames(environments) },
+    ]);
+  }
+  if (!isPlainObject(body)) {
+    throw new ConfigError(parsed.file, undefined, `environments.${environment}`, [
+      { label: 'Expected', value: 'an object of overrides' },
+    ]);
+  }
+
+  const merged: Record<string, unknown> = structuredClone(data);
+  delete merged.environments;
+
+  const allowed = new Set(ENVIRONMENT_OVERRIDABLE_PATHS.map((path) => path.join('.')));
+  for (const path of leafPaths(body)) {
+    if (!allowed.has(path.join('.'))) {
+      throw new ConfigError(parsed.file, undefined, `environments.${environment}.${path.join('.')}`, [
+        { label: 'Not overridable per environment', value: [...allowed].join(', ') },
+      ]);
+    }
+    setIn(merged, path.slice(0, -1), path[path.length - 1], getIn(body, path));
+  }
+
+  return { ...parsed, data: merged };
 }

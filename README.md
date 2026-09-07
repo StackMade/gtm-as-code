@@ -70,7 +70,7 @@ ga4:
 `analytics/.env.analytics.example` holds the IDs you gave `init`. Copy it to
 `analytics/.env.analytics` (gitignored, see [State](#state)) with your real values, or set the same
 variables in your CI environment. Every command picks that file up on its own: `.env.analytics`
-first, then `analytics/.env.analytics`, both relative to the working directory, and `--env <path>`
+first, then `analytics/.env.analytics`, both relative to the working directory, and `--dotenv <path>`
 points at a different one. A variable already set in the environment always wins over the file, so a
 CI `env:` block is never overridden by a stray checkout.
 
@@ -189,6 +189,67 @@ override an event in your own config to change that, root always wins.
 extends: ./node_modules/@stackmade/gtm-as-code/packs/ecommerce.yaml
 ```
 
+### Environments
+
+One tracking plan, several places to apply it. An `environments:` block declares named sets of
+overrides on top of the root config, and `--env <name>` picks one:
+
+```yaml
+google:
+  gtm:
+    accountId: "${GTM_ACCOUNT_ID}"
+    containerId: "${GTM_CONTAINER_ID}"      # the default, if no environment overrides it
+  ga4:
+    propertyId: "${GA4_PROPERTY_ID}"
+
+environments:
+  staging:
+    google:
+      gtm:
+        containerId: "${GTM_CONTAINER_ID_STAGING}"
+      ga4:
+        propertyId: "${GA4_PROPERTY_ID_STAGING}"
+    ga4:
+      streamWebsiteUrl: "https://staging.example.com"
+  production:
+    google:
+      gtm:
+        containerId: "${GTM_CONTAINER_ID_PROD}"
+      ga4:
+        propertyId: "${GA4_PROPERTY_ID_PROD}"
+    ga4:
+      streamWebsiteUrl: "https://example.com"
+```
+
+```bash
+npx gtm-code plan --env staging
+npx gtm-code apply --env production --auto-approve
+```
+
+Only these paths may differ per environment, because everything else is the tracking plan itself and
+sharing it is the point of the block:
+
+| Path | |
+|---|---|
+| `google.gtm.accountId` | |
+| `google.gtm.containerId` | |
+| `google.gtm.workspace` | |
+| `google.ga4.propertyId` | |
+| `google.ga4.measurementId` | |
+| `ga4.streamWebsiteUrl` | the site each environment actually runs on |
+
+Anything else in an environment body is a validation error naming the path, rather than a silent
+no-op.
+
+`--env` is never optional once the block exists, and never guessed. A config that declares
+environments is a config where "which container am I about to write to" has more than one answer,
+and a default there is how a staging apply reaches production. Running without it fails and lists
+the declared names.
+
+One run covers one environment. To apply to several, run the command once per environment; the
+resolution happens before validation, so every command downstream sees an ordinary config with one
+container and one property, `state.json` included.
+
 ### Schema
 
 ```yaml
@@ -206,6 +267,13 @@ google:
   ga4:
     propertyId: string
     measurementId: string      # optional, derived from ga4.streamWebsiteUrl's web stream if unset
+
+environments:                  # optional, see Environments above; needs --env <name> once present
+  <environment_name>:
+    google:                    # only google.gtm.{accountId,containerId,workspace},
+      gtm: {}                  # google.ga4.{propertyId,measurementId} and ga4.streamWebsiteUrl
+      ga4: {}                  # may differ per environment
+    ga4: {}
 
 events:
   <event_name>:
@@ -477,7 +545,8 @@ Global flags, available on every command:
 | Flag | Description |
 |---|---|
 | `-c, --config <path>` | Path to the config file (default: auto-discovered) |
-| `--env <path>` | Load environment variables from this file (default: `.env.analytics` or `analytics/.env.analytics`, if present). Values already in the environment are not overwritten. Named `--env`, not `--env-file`, because Node claims that one: it scans the whole command line for `--env-file` and exits before this CLI starts if the path is missing |
+| `--dotenv <path>` | Load environment variables from this file (default: `.env.analytics` or `analytics/.env.analytics`, if present). Values already in the environment are not overwritten. Named `--dotenv`, not `--env-file`, because Node claims that one: it scans the whole command line for `--env-file` and exits before this CLI starts if the path is missing. This flag was called `--env` up to 0.8.4 |
+| `-e, --env <name>` | Which entry of the config's [`environments:`](#environments) block to apply against. Required whenever that block is present, and rejected when it is not |
 | `-v, --verbose` | Verbose output |
 | `-q, --quiet` | Suppress non-error output |
 | `-f, --format <type>` | `text`, `json`, or `markdown`. `plan`/`diff`/`drift`/`verify`/`doctor` support all three; other commands ignore it and print `text` |
