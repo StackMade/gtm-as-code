@@ -1,4 +1,5 @@
-import { open, readFile, unlink } from 'node:fs/promises';
+import { mkdir, open, readFile, unlink } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 /** Another `apply` already holds the lock on this state file. */
 export class StateLockedError extends Error {
@@ -49,6 +50,10 @@ export async function withStateLock<T>(statePath: string, fn: () => Promise<T>):
 }
 
 async function acquire(lockPath: string): Promise<void> {
+  // The lock is taken before anything writes the state file, and `writeState` is what would
+  // otherwise create `.analytics/`. Without this, the first `apply` in a fresh project fails on
+  // ENOENT for a lock file in a directory nobody has made yet.
+  await mkdir(dirname(lockPath), { recursive: true });
   const handle = await open(lockPath, 'wx');
   await handle.writeFile(`pid ${process.pid}\n`);
   await handle.close();

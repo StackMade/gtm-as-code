@@ -103,3 +103,15 @@ async function waitForFile(path: string): Promise<void> {
     }
   }
 }
+
+test('withStateLock creates the state directory when it does not exist yet', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'gtm-as-code-lock-'));
+  const statePath = join(dir, '.analytics', 'state.json');
+
+  let ran = false;
+  await withStateLock(statePath, async () => {
+    ran = true;
+  });
+
+  assert.equal(ran, true);
+});
