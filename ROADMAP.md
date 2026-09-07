@@ -102,7 +102,8 @@ this step, and the action reads credentials from the environment. It must never 
 service-account key as an action input, because that writes a credential into workflow inputs and,
 from there, into logs and forks.
 
-Its inputs are `command` (`validate`, `plan`, or `apply`), `version`, `config`,
+Its inputs are `command` (`validate`, `plan`, or `apply`), `version`, `config`, `environment`
+(passed as `--env`, and mandatory from 0.9.0 whenever the config declares an `environments:` block),
 `working-directory` (configs live under `analytics/`, and monorepos need it), `node-version`
 (default 22), `auto-approve`, and `allow-destroy`. The last two default to false: an apply action
 that auto-approves by default is a footgun in precisely the environment it runs in.
@@ -118,10 +119,15 @@ one's.
 Releases are cut by tagging `vX.Y.Z` in the action repository and force-moving the `vX` tag onto it,
 which is the convention consumers already expect from every other action.
 
-Release coordination is the one recurring chore the split introduces. Every new CLI version on npm
-needs a deliberate bump of the pinned default in the action repository, followed by an action
-release. It is the thing most likely to silently rot, so it is worth automating early, even if only
-as a scheduled check comparing the pinned default against the latest npm version.
+Release coordination was called out here as the chore most likely to silently rot, and it did. It is
+automated: publishing to npm fires a `repository_dispatch` at the action repository, which rewrites
+the pinned default, commits, tags `vX.Y.Z`, and moves `vX`. What rotted was subtler than a forgotten
+bump. The bump workflow pushed its tag with the default `GITHUB_TOKEN`, and GitHub does not run
+workflows for events created with that token, so the tag push never triggered the workflow that
+moved the major tag. `v0` sat on `v0.1.1` through eight releases while every `@v0` consumer silently
+ran a CLI from the first week of the project. Fixed 2026-09-07 by moving the major tag inside the
+bump workflow itself, where no second trigger is needed. The lesson worth keeping: an automated
+release chore can rot more quietly than a manual one, because nobody is expecting to do anything.
 
 ## Done (0.3): adopt an existing setup
 

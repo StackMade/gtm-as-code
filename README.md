@@ -790,7 +790,9 @@ The quickest way is the companion action:
 ```
 
 See [gtm-as-code-action](https://github.com/StackMade/gtm-as-code-action) for its inputs. It
-installs this CLI from npm at a pinned version, so its own tag tells you which CLI you get.
+installs this CLI from npm at a pinned version, so its own tag tells you which CLI you get. A config
+that declares [environments](#environments) needs the action's `environment` input, since `--env` is
+mandatory once that block exists.
 
 To call the CLI directly instead:
 
