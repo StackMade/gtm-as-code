@@ -1,5 +1,5 @@
 ---
-'@stackmade/gtm-as-code': minor
+'@stackmade/gtm-as-code': patch
 ---
 
 `gtm-code verify` and `gtm-code doctor`, implementing ROADMAP.md milestone 0.8.
@@ -13,3 +13,10 @@
 - `gtm-code doctor` checks config validity, credentials, GTM/GA4 API reachability, and GA4 Data API
   quota headroom, explaining what's missing instead of `plan`/`apply` failing mid-run with a raw
   Google error.
+
+Both are live-verified against a real GA4 property. `doctor`'s quota check reads a real
+`tokensPerDay` figure on a standard non-360 property, and it tells "API not enabled" apart from
+"permission denied", which Google reports under the same `PERMISSION_DENIED` status. One caveat
+`verify` now states in its own output: the Data API's dimension schema is eventually consistent, so
+a parameter can be reported as not registered for a few minutes after `apply` created its custom
+dimension.

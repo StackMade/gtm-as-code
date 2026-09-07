@@ -145,7 +145,10 @@ function renderText(report: VerifyReport): void {
 
     for (const param of event.missingParameters) console.log(`         MISSING PARAM  ${param} — never seen with a value`);
     for (const param of event.notRegisteredParameters) {
-      console.log(`         not registered  ${param} — custom dimension doesn't exist on the property yet, run apply first`);
+      console.log(
+        `         not registered  ${param} — GA4 has no custom dimension for it. Run apply if it was never created; ` +
+          'if apply just created it, the Data API takes a few minutes to pick it up.',
+      );
     }
     for (const param of event.unverifiableParameters) console.log(`         unverifiable   ${param} — not a \`dimension: true\` parameter, GA4 can't be queried for it`);
   }

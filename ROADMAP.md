@@ -355,17 +355,24 @@ GA4 hardening is a hard prerequisite for all of it.
   this tool to call. Revisit if Google ever adds the endpoint. Google Ads and BigQuery links are deliberately excluded, and not planned for
   any later milestone either.
 
-## 0.8: verify against reality
+## Done (0.8): verify against reality
 
 Everything before this verifies that the configuration is what was declared. This verifies that the
 data is. Moved ahead of environments/scale: it is a correctness gate, the same category as 0.2/0.3,
 not breadth, and this roadmap orders correctness gates before breadth on principle. Nothing in it
 depends on multi-environment or multi-container support existing first.
 
-Shipped 2026-09-02, build/lint/test clean, but not yet live-verified against a real GA4 property —
-unlike every other milestone above, which only got marked `Done` after that. Not calling this one
-`Done` until the GA4 Data API `runReport` call (dimension names, `dimensionFilter`,
-`returnPropertyQuota`) has actually been confirmed against a live response.
+Shipped 2026-09-02 and live-verified 2026-09-07 against the sandbox property, the bar every other
+milestone here was held to. The `runReport` shapes are confirmed against real responses:
+`eventName`/`eventCount` for event counts, a `customEvent:{parameter}` dimension filtered by
+`eventName` for parameter checks, and `returnPropertyQuota`, which does return `tokensPerDay` on a
+standard non-360 property (200,000 tokens/day). An unregistered `customEvent:` dimension answers
+`INVALID_ARGUMENT`, which is the signal `verify` classifies as "not registered".
+
+One caveat came out of that pass and is not a bug in this tool: the Data API's dimension schema is
+eventually consistent. A custom dimension created through the Admin API answered `INVALID_ARGUMENT`,
+then `200`, then `INVALID_ARGUMENT` again for the same query within a few minutes. So a `verify` run
+immediately after `apply` can report a parameter as not registered when it is; the message says so.
 
 - `gtm-code verify`. Query the GA4 Data API for the declared events over the last N days and report
   which ones have never been received, or are missing declared parameters. It needs a different API
