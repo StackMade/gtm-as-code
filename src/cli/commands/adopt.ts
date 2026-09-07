@@ -23,7 +23,8 @@ export async function adopt(resourceArg: string, opts: GlobalOptions): Promise<v
     const parsed = loadConfig(opts.config, opts.env);
     const config = validateConfig({ ...parsed, data: interpolateConfig(parsed) });
 
-    if (kind === 'folder' || kind === 'variable' || kind === 'trigger' || kind === 'tag') await adoptGtm(kind, id, config);
+    if (kind === 'folder' || kind === 'variable' || kind === 'trigger' || kind === 'tag' || kind === 'environment')
+      await adoptGtm(kind, id, config);
     else await adoptGa4(kind, id, config);
   } catch (error) {
     printFailure(error);

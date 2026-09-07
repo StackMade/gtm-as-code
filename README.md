@@ -853,8 +853,9 @@ Not available yet. These are known gaps, so please don't file a bug for them:
 - GTM custom templates; conversion linker and community-gallery template tags (their payloads need
   fields, like Floodlight ids or a gallery template's own parameter schema, this tool can't
   live-verify against a sandbox container). See [Schema](#schema) for what is covered
-- Multi-environment / multi-container / multi-property config, and access-as-code (GTM/GA4
-  permissions)
+- A single run writing to more than one container or property at once. Several environments mean
+  several runs, one per `--env`; see [Environments](#environments)
+- Access as code (GTM user permissions, GA4 access bindings)
 
 There is deliberately no `action.yml` in this repository. The GitHub Action ships from
 [StackMade/gtm-as-code-action](https://github.com/StackMade/gtm-as-code-action) so that its version

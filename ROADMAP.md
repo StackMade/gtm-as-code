@@ -384,20 +384,44 @@ immediately after `apply` can report a parameter as not registered when it is; t
 - `gtm-code doctor`. Check credentials, API enablement, granted scopes, and quota headroom, and
   explain what's missing instead of failing mid-run.
 
-## 0.9: environments and scale
+## Done (0.9): environments and scale
 
-Moved after verification on purpose: multi-environment, multi-container, and access-as-code are real
-but currently speculative scope, no adopter has asked for a second container or property yet. Revisit
-the ordering if that changes before 0.8 ships.
+Moved after verification on purpose: multi-environment, multi-container, and access-as-code were
+speculative scope while no adopter had asked for a second container or property.
 
-- An `environments:` block and `--env`. Dev, staging and production against different containers and
-  properties from one config.
-- GTM environments. The API's own environment resources, distinct from the config-level concept
-  above.
-- Multiple containers and properties per config. Currently one of each is assumed throughout.
-- Access as code. GTM user permissions and GA4 access bindings. Useful, and also the point at which
-  a mistake in this tool becomes a security incident, hence last, and behind `--allow-destroy`-style
-  guards.
+- An `environments:` block and `--env`. **Done.** A named set of overrides on top of the root config,
+  resolved after `extends:` and before validation, so every command downstream sees an ordinary
+  config with one container and one property. Only `google.gtm.{accountId,containerId,workspace}`,
+  `google.ga4.{propertyId,measurementId}` and `ga4.streamWebsiteUrl` may differ per environment;
+  anything else in an environment body is a validation error naming the path. `--env` is required
+  whenever the block is present and refused when it is not, with no default: a config that declares
+  environments is one where "which container am I about to write to" has more than one answer.
+  `--env <path>`, which loaded an env file, became `--dotenv <path>` to free the name.
+- GTM environments. **Done.** `gtm.environments` manages GTM's own environment objects, the ones
+  that give a staging site its `gtm_auth`/`gtm_preview` snippet. They are container-level rather
+  than workspace-level (confirmed live 2026-09-07 along with the rest of the payload), so `apply`
+  writes them directly instead of staging them into the workspace `publish` later publishes.
+  Ownership is stamped into `description`, since a GTM environment has no `notes` field; GTM's
+  built-in `Live` and `Latest` carry no stamp and are never listed, updated, deleted or pulled.
+  `enableDebug` is always written as a boolean, because GTM omits a false boolean from responses
+  entirely and an absent field would otherwise diff against a declared `false` forever.
+- Multiple containers and properties per config. **Covered by environments, not built separately.**
+  One run targets one container and one property; several environments mean several runs. That is
+  what `.analytics/state.json` already supported without a format change, since its keys are scoped
+  by property id. A single run writing to several containers at once was deliberately not built: it
+  would touch the diff, the dependency graph, the state lock, the plan output and every provider
+  client, and no adopter has asked for it.
+
+Also worth knowing before a large container: the GTM API allows **30 queries per minute per user**
+(observed live as `RESOURCE_EXHAUSTED` / `rateLimitExceeded`, `defaultPerMinutePerUser`). A `plan`
+plus `apply` cycle over a container with many resources can reach it; the fix is to wait out the
+minute, not to retry immediately.
+
+## Deferred out of 0.9: access as code
+
+GTM user permissions and GA4 access bindings. Useful, and also the point at which a mistake in this
+tool becomes a security incident rather than a wrong tag, so it gets its own milestone and its own
+guards rather than riding along with environments.
 
 ## 1.0
 

@@ -27,6 +27,7 @@ export type PullKind =
   | 'variable'
   | 'trigger'
   | 'tag'
+  | 'environment'
   | 'dimension'
   | 'metric'
   | 'keyEvent'
@@ -37,7 +38,16 @@ export type PullKind =
   | 'channelGroup'
   | 'measurementProtocolSecret';
 
-const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag'];
+const GTM_KINDS: GtmKind[] = ['folder', 'variable', 'trigger', 'tag', 'environment'];
+
+/** GTM's own `Live` and `Latest`, which report a `type` a user-created environment does not carry
+ *  (confirmed live 2026-09-07). Neither can be created or deleted, so importing them would write a
+ *  config `apply` could never satisfy. */
+const BUILT_IN_ENVIRONMENT_TYPES = ['live', 'latest'];
+
+function isUserEnvironment(object: GtmObject): boolean {
+  return !BUILT_IN_ENVIRONMENT_TYPES.includes(String(object.type));
+}
 const GA4_KINDS: Ga4Kind[] = ['dimension', 'metric', 'keyEvent', 'audience', 'calculatedMetric', 'channelGroup'];
 
 /** Where a pulled resource of each kind lands in `AnalyticsConfig`. */
@@ -46,6 +56,7 @@ const BUCKET: Record<PullKind, [top: 'gtm' | 'ga4', field: string]> = {
   variable: ['gtm', 'variables'],
   trigger: ['gtm', 'triggers'],
   tag: ['gtm', 'tags'],
+  environment: ['gtm', 'environments'],
   dimension: ['ga4', 'dimensions'],
   metric: ['ga4', 'metrics'],
   keyEvent: ['ga4', 'keyEvents'],
@@ -62,6 +73,7 @@ const KIND_LABEL: Record<PullKind, string> = {
   variable: 'variables',
   trigger: 'triggers',
   tag: 'tags',
+  environment: 'environments',
   dimension: 'custom dimensions',
   metric: 'custom metrics',
   keyEvent: 'key events',
@@ -139,6 +151,9 @@ async function pullFromExport(opts: PullOptions): Promise<void> {
     variables: container.variable.length,
     triggers: container.trigger.length,
     tags: container.tag.length,
+    // A GTM UI container export carries no environments; they are container-level, not part of the
+    // exported container version.
+    environments: 0,
     dimensions: 0,
     metrics: 0,
     keyEvents: 0,
@@ -176,7 +191,13 @@ async function pullAll(opts: PullOptions): Promise<void> {
   const raw = parsed.data as Record<string, unknown>;
   const nextConfig = {
     ...raw,
-    gtm: { folders: gtmResources.folder, variables: gtmResources.variable, triggers: gtmResources.trigger, tags: gtmResources.tag },
+    gtm: {
+      folders: gtmResources.folder,
+      variables: gtmResources.variable,
+      triggers: gtmResources.trigger,
+      tags: gtmResources.tag,
+      environments: gtmResources.environment,
+    },
     ga4: {
       dimensions: ga4Resources.dimension,
       metrics: ga4Resources.metric,
@@ -211,7 +232,7 @@ async function pullOne(opts: PullOptions): Promise<void> {
   const { gtmResources, ga4Resources } = await pullAllResources(gtm, ga4);
 
   const desiredState =
-    kind === 'folder' || kind === 'variable' || kind === 'trigger' || kind === 'tag'
+    kind === 'folder' || kind === 'variable' || kind === 'trigger' || kind === 'tag' || kind === 'environment'
       ? gtmResources[kind][id]
       : ga4Resources[kind][id];
 
@@ -252,6 +273,7 @@ interface PulledGtm {
   variable: Record<string, Record<string, unknown>>;
   trigger: Record<string, Record<string, unknown>>;
   tag: Record<string, Record<string, unknown>>;
+  environment: Record<string, Record<string, unknown>>;
 }
 
 interface PulledGa4 {
@@ -271,6 +293,7 @@ export interface FoundCounts {
   variables: number;
   triggers: number;
   tags: number;
+  environments: number;
   dimensions: number;
   metrics: number;
   keyEvents: number;
@@ -288,7 +311,10 @@ async function pullAllResources(
   gtm: GtmClient,
   ga4: Ga4Client,
 ): Promise<{ gtmResources: PulledGtm; ga4Resources: PulledGa4; counts: FoundCounts }> {
-  const [folders, variables, triggers, tags] = await Promise.all(GTM_KINDS.map((kind) => gtm.list(kind)));
+  const [folders, variables, triggers, tags, allEnvironments] = await Promise.all(
+    GTM_KINDS.map((kind) => gtm.list(kind)),
+  );
+  const environments = (allEnvironments as GtmObject[]).filter(isUserEnvironment);
 
   const folderGtmIdToLogicalId: Record<string, string> = {};
   const folderIds = assignIds(folders as GtmObject[]);
@@ -309,12 +335,14 @@ async function pullAllResources(
   const variableMap = toGtmMap('variable', variables as GtmObject[], assignIds(variables as GtmObject[]), context);
   const triggerMap = toGtmMap('trigger', triggers as GtmObject[], triggerIds, context);
   const tagMap = toGtmMap('tag', tags as GtmObject[], assignIds(tags as GtmObject[]), context);
+  const environmentMap = toGtmMap('environment', environments, assignIds(environments), context);
 
   const gtmResources: PulledGtm = {
     folder: folderMap.resources,
     variable: variableMap.resources,
     trigger: triggerMap.resources,
     tag: tagMap.resources,
+    environment: environmentMap.resources,
   };
 
   const [dimensions, metrics, keyEvents, audiences, calculatedMetrics, channelGroups] = await Promise.all(
@@ -360,6 +388,7 @@ async function pullAllResources(
     variables: variables.length,
     triggers: triggers.length,
     tags: tags.length,
+    environments: environments.length,
     dimensions: Object.keys(ga4Resources.dimension).length,
     metrics: Object.keys(ga4Resources.metric).length,
     keyEvents: Object.keys(ga4Resources.keyEvent).length,
@@ -369,7 +398,7 @@ async function pullAllResources(
     calculatedMetrics: Object.keys(ga4Resources.calculatedMetric).length,
     channelGroups: Object.keys(ga4Resources.channelGroup).length,
     measurementProtocolSecrets: Object.keys(ga4Resources.measurementProtocolSecret).length,
-    skipped: folderMap.skipped + variableMap.skipped + triggerMap.skipped + tagMap.skipped,
+    skipped: folderMap.skipped + variableMap.skipped + triggerMap.skipped + tagMap.skipped + environmentMap.skipped,
   };
 
   return { gtmResources, ga4Resources, counts };
@@ -457,6 +486,7 @@ export function buildFoundSummary(counts: FoundCounts): string[] {
     `  ${counts.triggers} triggers`,
     `  ${counts.variables} variables`,
     `  ${counts.folders} folders`,
+    `  ${counts.environments} environments`,
     `  ${counts.dimensions} custom dimensions`,
     `  ${counts.metrics} custom metrics`,
     `  ${counts.keyEvents} key events`,
