@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+# Read-only by default; a job that needs more asks for it itself.
+permissions:
+  contents: read
+
 jobs:
   # Which of the two halves should run. Without this gate the version job fails with
   # "No unreleased changesets found" on exactly the push that is supposed to publish,
@@ -16,16 +20,16 @@ jobs:
       mode: ${{ steps.select.outputs.mode }}
     steps:
       # Changesets compares against the base branch, so it needs the full history.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
       # select-mode shells out to @changesets/cli, so it has to be installed first.
       - run: npm ci
-      - uses: changesets/action/select-mode@v2
+      - uses: changesets/action/select-mode@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2
         id: select
 
   version:
@@ -36,15 +40,15 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - uses: changesets/action/version@v2
+      - uses: changesets/action/version@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2
         with:
           pr-title: 'Release'
 
@@ -62,15 +66,16 @@ jobs:
       # breaks every publish until the npm setting is updated to match.
       id-token: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      # Trusted publishing needs npm >= 11.5.1; Node 24 ships npm 11, this pins the floor.
-      - run: npm install -g npm@latest
+      # Trusted publishing needs npm >= 11.5.1. Pinned exactly: this job holds id-token: write,
+      # so whatever npm release lands here runs with publish rights.
+      - run: npm install -g npm@12.2.0
 
       - run: npm ci
       - run: npm run lint
@@ -79,7 +84,7 @@ jobs:
 
       # prepack rebuilds dist/ from the clean checkout, and provenance is attached
       # automatically under OIDC.
-      - uses: changesets/action/publish@v2
+      - uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2
         id: changesets
         with:
           script: npm run release
