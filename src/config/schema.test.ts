@@ -696,3 +696,17 @@ test('gtm.builtInVariables drops repeated names', () => {
   const config = validate('\ngtm:\n  builtInVariables: ["Click ID", "Page URL", "Click ID"]\n');
   assert.deepEqual(config.gtm.builtInVariables, ['Click ID', 'Page URL']);
 });
+
+test('a non-numeric account, container or property id fails validation before it can reach a URL path', () => {
+  for (const [field, line] of [
+    ['google.gtm.accountId', 'accountId: "1"'],
+    ['google.gtm.containerId', 'containerId: "1"'],
+    ['google.ga4.propertyId', 'propertyId: "1"'],
+  ]) {
+    const header = HEADER.replace(line, line.replace('"1"', '"../user_permissions/5#"'));
+    assert.throws(
+      () => validateConfig(parseYaml('analytics.yaml', header)),
+      (error: unknown) => error instanceof ConfigError && error.message.includes(field),
+    );
+  }
+});

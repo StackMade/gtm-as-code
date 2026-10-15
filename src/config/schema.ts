@@ -374,8 +374,8 @@ export function validateConfig(parsed: ParsedConfig): AnalyticsConfig {
 
   const gtmConfig = requireObject(parsed, google.gtm, ['google', 'gtm']);
   checkUnknownKeys(parsed, gtmConfig, ['accountId', 'containerId', 'workspace'], ['google', 'gtm']);
-  const accountId = requireString(parsed, gtmConfig.accountId, ['google', 'gtm', 'accountId']);
-  const containerId = requireString(parsed, gtmConfig.containerId, ['google', 'gtm', 'containerId']);
+  const accountId = requireNumericId(parsed, gtmConfig.accountId, ['google', 'gtm', 'accountId']);
+  const containerId = requireNumericId(parsed, gtmConfig.containerId, ['google', 'gtm', 'containerId']);
   const workspace =
     gtmConfig.workspace !== undefined
       ? requireString(parsed, gtmConfig.workspace, ['google', 'gtm', 'workspace'])
@@ -383,7 +383,7 @@ export function validateConfig(parsed: ParsedConfig): AnalyticsConfig {
 
   const ga4Config = requireObject(parsed, google.ga4, ['google', 'ga4']);
   checkUnknownKeys(parsed, ga4Config, ['propertyId', 'measurementId'], ['google', 'ga4']);
-  const propertyId = requireString(parsed, ga4Config.propertyId, ['google', 'ga4', 'propertyId']);
+  const propertyId = requireNumericId(parsed, ga4Config.propertyId, ['google', 'ga4', 'propertyId']);
   const measurementId =
     ga4Config.measurementId !== undefined
       ? requireString(parsed, ga4Config.measurementId, ['google', 'ga4', 'measurementId'])
@@ -1457,6 +1457,22 @@ function requireString(parsed: ParsedConfig, value: unknown, path: string[]): st
     ]);
   }
   return value;
+}
+
+/**
+ * Account, container and property ids are spliced into Google API URL paths. Anything but digits
+ * (`../`, `?`, `#`) would let the config redirect a request to a different endpoint than the one
+ * the command means to call, so they are held to the numeric form Google issues.
+ */
+function requireNumericId(parsed: ParsedConfig, value: unknown, path: string[]): string {
+  const id = requireString(parsed, value, path);
+  if (!/^\d+$/.test(id)) {
+    fail(parsed, path, [
+      { label: 'Expected', value: 'a numeric id, e.g. "123456789"' },
+      { label: 'Received', value: id },
+    ]);
+  }
+  return id;
 }
 
 function requireBoolean(parsed: ParsedConfig, value: unknown, path: string[]): boolean {
