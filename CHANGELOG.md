@@ -1,5 +1,14 @@
 # @stackmade/gtm-as-code
 
+## 0.9.2
+
+### Patch Changes
+
+- 767ea43: `google.gtm.accountId`, `google.gtm.containerId` and `google.ga4.propertyId` must now be numeric.
+  They go straight into Google API URL paths, so a value such as `../user_permissions/5#` could send
+  a request to a different endpoint than the command intended. Validation now rejects it with the
+  file and line.
+
 ## 0.9.1
 
 ### Patch Changes
