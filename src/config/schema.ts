@@ -548,7 +548,8 @@ function validateBuiltInVariables(parsed: ParsedConfig, raw: unknown, path: stri
       fail(parsed, [...path, String(index)], body);
     }
   }
-  return names;
+  // A repeated name would be enabled twice in one request and show as a phantom offline diff.
+  return [...new Set(names)];
 }
 
 // `type` is checked against what the provider layer can actually build (`requireSupportedType`).

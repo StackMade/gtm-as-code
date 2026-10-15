@@ -1,6 +1,5 @@
-import { computePlan, planJsonWithBuiltIns, planMarkdownWithBuiltIns } from './plan.js';
+import { computePlan, hasPlanChanges, planJsonWithBuiltIns, planMarkdownWithBuiltIns } from './plan.js';
 import { SCOPES } from '../../providers/google/auth/index.js';
-import { hasGa4SettingsChanges } from '../../providers/google/ga4/settings.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
 
@@ -14,7 +13,7 @@ import type { GlobalOptions } from '../options.js';
 export async function drift(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmReadonly, SCOPES.ga4Readonly]);
-    const drifted = result.changes.length > 0 || result.builtInVariablesToEnable.length > 0 || hasGa4SettingsChanges(result.ga4Settings);
+    const drifted = hasPlanChanges(result);
 
     if (opts.format === 'json') console.log(JSON.stringify(planJsonWithBuiltIns(result), null, 2));
     else if (opts.format === 'markdown') console.log(planMarkdownWithBuiltIns(result));

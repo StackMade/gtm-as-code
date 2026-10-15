@@ -441,9 +441,10 @@ far as the API.
 
 `gtm.builtInVariables` is enable-only: `plan`/`drift` report a name listed but not yet enabled
 remotely, `apply` enables it. Names not in the config are left alone — enabling one by hand in the
-GTM UI is never reported as drift, and `apply` never disables one. Only the click/page/form/error/
-history/debug set is supported today (see `src/providers/google/gtm/builtin-variables.ts` for the
-exact list); scroll depth, element visibility, video, and AMP variables aren't yet.
+GTM UI is never reported as drift, and `apply` never disables one. A name listed twice counts once.
+Only the click/page/form/error/history/debug set is supported today (see
+`src/providers/google/gtm/builtin-variables.ts` for the exact list); scroll depth, element
+visibility, video, and AMP variables aren't yet.
 
 A tag's `trigger`/`exceptTrigger` can reference GTM's built-in triggers by name (`"All Pages"`,
 `"Initialization - All Pages"`) without declaring them under `gtm.triggers`. These trigger objects
@@ -586,7 +587,8 @@ overwriting.
 ### `gtm-code validate`
 
 Parses and schema-checks the config offline, including whether every `gtm.*` `type` is one this tool
-can build. No Google API calls, no credentials needed.
+can build. It also rejects dependency cycles between variables, triggers and tags, including a
+variable that references itself (`{{a}}` inside `a`). No Google API calls, no credentials needed.
 
 ### `gtm-code plan [--format text|json|markdown]`
 
@@ -601,7 +603,14 @@ codes.
 Compares two config files against each other (`fileA` as the baseline, `fileB` as desired), the
 same way `plan` compares a config against live state. No network calls, no credentials needed. Exit
 code `2` if the two files differ, `1` on a load/validation error, `0` if they resolve to the same
-resources.
+resources and setting declarations.
+
+Settings (`ga4.dataRetention`, `googleSignals`, `attributionSettings`, `enhancedMeasurement`,
+`streamWebsiteUrl`) and `gtm.builtInVariables` are reported separately from resource operations.
+JSON includes an optional `configChanges` array with `path`, `before`, and `after`; an absent side
+means the declaration was added or removed. These changes set `hasChanges: true` and exit code `2`,
+while `counts` still counts resource operations only. Removing a setting declaration does not
+reset it in Google, and removing a built-in variable declaration does not disable it.
 
 ### `gtm-code drift [--format json|markdown]`
 
@@ -611,9 +620,10 @@ detail `plan` does. Exit code `1` if drift is found (or on error), `0` if clean.
 
 ### `gtm-code apply [--auto-approve] [--allow-destroy] [--allow-destroy-protected]`
 
-Runs the same diff as `plan`, then executes it. Deletes go first (tags, then triggers, then
-variables, the reverse of creation order), then creates in dependency order so a tag can reference
-a trigger created in the same run, then updates. Prompts `Continue? [y/N]` unless `--auto-approve`
+Runs the same diff as `plan`, then executes it. Dependency cycles are rejected by `validate` and
+`plan` before any API calls, and by `apply` before any writes. Deletes go first (tags, then
+triggers, then variables, the reverse of creation order), then creates in dependency order so a
+tag can reference a trigger created in the same run, then updates. Prompts `Continue? [y/N]` unless `--auto-approve`
 is passed. With no terminal attached there is nothing to answer that prompt, so `apply` declines and
 says which flag it wanted rather than waiting: a scripted run passes `--auto-approve`, plus
 `--allow-destroy` if the plan deletes anything.
@@ -684,6 +694,8 @@ Generates typed event helpers from `events:`: a TypeScript `EventName` union, on
 per event, an `EventParams` map, and a `track<E extends EventName>(event: E, params: EventParams[E])`
 function that pushes `{ event, ...params }` onto `window.dataLayer`. A typo in an event name or a
 missing required parameter is a compile error in the consuming app rather than missing data in GA4.
+When event names normalize to the same interface name, the generated interfaces get distinct
+numeric suffixes. The shared `EventParams` name is also reserved; event keys in `track()` stay exact.
 A `type: items` parameter emits as `Item[]`, backed by a shared `Item` interface (GA4's ecommerce
 item fields) that's only emitted when at least one event uses it. Prints to stdout by default;
 `--out` writes it to a file. Runs the same validate/compile pipeline as `validate`.
@@ -756,6 +768,9 @@ change for this package.
   "changes": [{ "operation": "create", "type": "gtm.trigger", "id": "generate_lead" }]
 }
 ```
+
+`hasChanges` also includes pending GA4 settings and built-in variable changes, reported in
+`ga4Settings` and `builtInVariablesToEnable`. `counts` counts resource operations only.
 
 `operation` is `"create"`, `"update"`, or `"delete"`. `type` is the resource type as it appears in
 `plan`'s text output (`gtm.variable`, `gtm.trigger`, `gtm.tag`, `ga4.dimension`, `ga4.metric`,

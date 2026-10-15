@@ -1,4 +1,4 @@
-import { computePlan, describeGa4SettingsChanges, type PlanResult } from './plan.js';
+import { computePlan, hasPlanChanges, describeGa4SettingsChanges, type PlanResult } from './plan.js';
 import { confirm } from '../confirm.js';
 import { buildDependencyGraph } from '../../core/graph.js';
 import { writeState, recordManaged, forgetManaged, setProtected, readState } from '../../core/state.js';
@@ -39,7 +39,7 @@ export async function apply(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmEdit, SCOPES.ga4Edit]);
 
-    if (result.changes.length === 0 && result.builtInVariablesToEnable.length === 0 && !hasGa4SettingsChanges(result.ga4Settings)) {
+    if (!hasPlanChanges(result)) {
       console.log('No changes.');
       return;
     }
@@ -129,6 +129,7 @@ function printDestructiveWarnings(changes: Change[]): void {
 
 async function execute(result: PlanResult): Promise<void> {
   const { changes, compiled, gtm, ga4, statePath } = result;
+  const order = buildDependencyGraph(compiled).topologicalOrder();
   let state = await readState(statePath);
   const triggerGtmIds = invert(result.triggerGtmIdToLogicalId);
   const folderGtmIds = invert(result.folderGtmIdToLogicalId);
@@ -179,7 +180,6 @@ async function execute(result: PlanResult): Promise<void> {
   }
 
   // Dependency order, tracking new trigger ids so a tag created in the same run can reference them.
-  const order = buildDependencyGraph(compiled).topologicalOrder();
   const createsById = new Map(
     changes.filter(isCreate).filter((c) => c.resource.type.startsWith('gtm.')).map((c) => [`${c.resource.type.split('.')[1]}:${c.resource.id}`, c]),
   );

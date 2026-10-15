@@ -98,7 +98,7 @@ export function buildDependencyGraph(config: AnalyticsConfig): DependencyGraph {
     const self = nodeId('variable', id);
     graph.addNode(self);
     for (const variableId of collectVariableRefs(variable, variableIds)) {
-      if (variableId !== id) graph.addEdge(nodeId('variable', variableId), self);
+      graph.addEdge(nodeId('variable', variableId), self);
     }
     if (variable.folder) graph.addEdge(nodeId('folder', variable.folder), self);
   }

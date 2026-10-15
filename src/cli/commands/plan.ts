@@ -76,7 +76,7 @@ export async function plan(opts: GlobalOptions): Promise<void> {
   try {
     const result = await computePlan(opts, [SCOPES.gtmReadonly, SCOPES.ga4Readonly]);
     render(result, opts.format);
-    if (result.changes.length > 0 || result.builtInVariablesToEnable.length > 0 || hasGa4SettingsChanges(result.ga4Settings)) {
+    if (hasPlanChanges(result)) {
       process.exitCode = 2;
     }
   } catch (error) {
@@ -90,6 +90,9 @@ export async function computePlan(opts: GlobalOptions, scopes: string[]): Promis
   const parsed = loadConfig(opts.config, opts.env);
   const interpolated = { ...parsed, data: interpolateConfig(parsed) };
   const config = validateConfig(interpolated);
+
+  // Reject invalid dependency graphs before credential discovery or any remote calls.
+  compileEvents(config, parsed.file);
 
   const auth = await authorize(scopes);
   const ga4 = new Ga4Client(auth, config.google.ga4.propertyId);
@@ -306,17 +309,22 @@ function renderMarkdown(result: PlanResult): void {
   console.log(planMarkdownWithBuiltIns(result));
 }
 
-/** `buildPlanJson`/`buildPlanMarkdown` only know `ChangeSummary` — this adds the built-in-variable
- *  gap on top, shared by `plan` and `drift`, the two commands that fetch it via `computePlan`. */
+/** One change predicate for plan/drift output, exit codes and apply's no-op check. */
+export function hasPlanChanges(result: Pick<PlanResult, 'changes' | 'builtInVariablesToEnable' | 'ga4Settings'>): boolean {
+  return result.changes.length > 0 || result.builtInVariablesToEnable.length > 0 || hasGa4SettingsChanges(result.ga4Settings);
+}
+
+/** Adds settings and built-ins to the resource-only summary shared by plan and drift. */
 export function planJsonWithBuiltIns(result: PlanResult): PlanJson {
   const json = buildPlanJson(result);
+  json.hasChanges = hasPlanChanges(result);
   if (result.builtInVariablesToEnable.length > 0) json.builtInVariablesToEnable = builtInVariableNames(result.builtInVariablesToEnable);
   if (hasGa4SettingsChanges(result.ga4Settings)) json.ga4Settings = result.ga4Settings;
   return json;
 }
 
 export function planMarkdownWithBuiltIns(result: PlanResult): string {
-  const lines = [buildPlanMarkdown(result)];
+  const lines = [result.changes.length === 0 && hasPlanChanges(result) ? '**GTM as Code plan**' : buildPlanMarkdown(result)];
   if (result.builtInVariablesToEnable.length > 0) {
     lines.push('', `Built-in variables to enable: ${builtInVariableNames(result.builtInVariablesToEnable).join(', ')}`);
   }

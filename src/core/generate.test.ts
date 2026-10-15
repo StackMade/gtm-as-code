@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import type { AnalyticsConfig } from '../config/schema.js';
 import { generateEventTypes } from './generate.js';
 
@@ -71,4 +75,24 @@ test('generateEventTypes emits an Item interface and Item[] field for a type: it
 test('generateEventTypes omits the Item interface when no event uses type: items', () => {
   const source = generateEventTypes(baseConfig({ events: { add_to_cart: { parameters: {} } } }));
   assert.doesNotMatch(source, /export interface Item \{/);
+});
+
+test('generated helpers compile and retain distinct parameter types for colliding and reserved names', () => {
+  const source = generateEventTypes(baseConfig({ events: {
+    foo_bar: { parameters: { amount: { type: 'number' } } },
+    foo__bar: { parameters: { amount: { type: 'string' } } },
+    event: { parameters: { value: { type: 'boolean' } } },
+  } }));
+  const dir = mkdtempSync(join(tmpdir(), 'gtm-generated-types-'));
+  const file = join(dir, 'events.ts');
+  writeFileSync(file, source + `
+track('foo_bar', { amount: 42 });
+track('foo__bar', { amount: '42' });
+track('event', { value: true });
+// @ts-expect-error distinct event parameter types must not merge
+track('foo_bar', { amount: 'wrong' });
+// @ts-expect-error distinct event parameter types must not merge
+track('foo__bar', { amount: 42 });
+`);
+  execFileSync(resolve('node_modules/.bin/tsc'), ['--ignoreConfig', '--noEmit', '--strict', '--skipLibCheck', '--lib', 'es2022,dom', file], { stdio: 'pipe' });
 });

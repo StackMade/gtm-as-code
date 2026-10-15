@@ -1,6 +1,7 @@
 import type { AnalyticsConfig } from '../config/schema.js';
 import { ConfigError } from '../config/errors.js';
 import type { Resource } from './resource.js';
+import { buildDependencyGraph } from './graph.js';
 
 /**
  * Expands high-level `events.*` declarations into the GTM/GA4 resources they
@@ -100,11 +101,13 @@ export function compileEvents(
     ]);
   }
 
-  return {
+  const compiled = {
     ...config,
     gtm: { ...config.gtm, variables, triggers, tags },
     ga4: { ...config.ga4, dimensions, keyEvents },
   };
+  buildDependencyGraph(compiled).topologicalOrder();
+  return compiled;
 }
 
 // Verified against support.google.com/analytics/answer/13316687 (2026-08-28).

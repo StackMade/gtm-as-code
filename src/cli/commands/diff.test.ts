@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { computeDiff } from './diff.js';
+import { computeDiff, buildDiffJson, buildDiffMarkdown } from './diff.js';
 
 const BASE_YAML = `
 version: 1
@@ -92,4 +92,31 @@ test('computeDiff reports deletes when fileA has resources fileB drops', () => {
   assert.equal(result.counts.delete > 0, true);
   const deletedIds = result.changes.filter((c) => c.operation === 'delete').map((c) => c.resource.id);
   assert.ok(deletedIds.includes('purchase'));
+});
+
+test('offline diff reports settings and built-in declarations without inventing resource deletes', () => {
+  const before = writeFixture('before.yaml', BASE_YAML + '\nga4:\n  dataRetention: TWO_MONTHS\n  googleSignals: GOOGLE_SIGNALS_ENABLED\ngtm:\n  builtInVariables: ["Click ID"]\n');
+  const after = writeFixture('after.yaml', BASE_YAML + '\nga4:\n  dataRetention: FOURTEEN_MONTHS\ngtm:\n  builtInVariables: []\n');
+  const result = computeDiff(before, after);
+  assert.deepEqual(result.counts, { create: 0, update: 0, delete: 0 });
+  assert.deepEqual(result.configChanges, [
+    { path: 'gtm.builtInVariables', before: ['Click ID'], after: [] },
+    { path: 'ga4.dataRetention', before: 'TWO_MONTHS', after: 'FOURTEEN_MONTHS' },
+    { path: 'ga4.googleSignals', before: 'GOOGLE_SIGNALS_ENABLED' },
+  ]);
+  assert.equal(buildDiffJson(result).hasChanges, true);
+  assert.deepEqual(buildDiffJson(result).configChanges, result.configChanges);
+  assert.doesNotMatch(buildDiffMarkdown(result), /no changes/i);
+  assert.match(buildDiffMarkdown(result), /does not reset Google settings/);
+  const unchanged = computeDiff(after, after);
+  assert.deepEqual(unchanged.configChanges, []);
+  assert.equal(buildDiffJson(unchanged).hasChanges, false);
+});
+
+test('offline diff compares nested stream settings and ignores built-in ordering', () => {
+  const before = writeFixture('before.yaml', BASE_YAML + '\nga4:\n  streamWebsiteUrl: https://example.com\n  enhancedMeasurement: {scrollsEnabled: true}\ngtm:\n  builtInVariables: ["Click ID", "Page URL"]\n');
+  const after = writeFixture('after.yaml', BASE_YAML + '\nga4:\n  streamWebsiteUrl: https://example.com\n  enhancedMeasurement: {scrollsEnabled: false}\ngtm:\n  builtInVariables: ["Page URL", "Click ID"]\n');
+  assert.deepEqual(computeDiff(before, after).configChanges, [
+    { path: 'ga4.enhancedMeasurement', before: { scrollsEnabled: true }, after: { scrollsEnabled: false } },
+  ]);
 });

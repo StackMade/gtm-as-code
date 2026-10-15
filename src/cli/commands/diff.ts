@@ -2,11 +2,12 @@ import { loadConfig } from '../../config/loader.js';
 import { interpolateConfig } from '../../config/interpolation.js';
 import { validateConfig } from '../../config/schema.js';
 import { compileEvents, toResources } from '../../core/compile.js';
-import { diff as diffResources } from '../../core/diff.js';
+import { deepEqual, diff as diffResources } from '../../core/diff.js';
 import type { Change, Resource } from '../../core/resource.js';
 import { buildPlanJson, buildPlanMarkdown, type PlanJson } from './plan.js';
 import { printFailure } from '../failure.js';
 import type { GlobalOptions } from '../options.js';
+import type { AnalyticsConfig } from '../../config/schema.js';
 
 const KIND_LABEL: Record<string, string> = {
   'gtm.variable': 'variable',
@@ -23,7 +24,14 @@ const KIND_LABEL: Record<string, string> = {
   'ga4.measurementProtocolSecret': 'measurement protocol secret',
 };
 
+export interface ConfigChange {
+  path: string;
+  before?: unknown;
+  after?: unknown;
+}
+
 export interface DiffResult {
+  configChanges: ConfigChange[];
   changes: Change[];
   counts: { create: number; update: number; delete: number };
 }
@@ -33,29 +41,30 @@ export interface DiffResult {
  * resource lists. `fileB` is "desired", `fileA` is the baseline it is compared against —
  * the result reads as "what would change going from fileA to fileB". */
 export function computeDiff(fileA: string, fileB: string, environment?: string): DiffResult {
-  const resourcesOf = (path: string): Resource[] => {
+  const configOf = (path: string): AnalyticsConfig => {
     const parsed = loadConfig(path, environment);
     const interpolated = { ...parsed, data: interpolateConfig(parsed) };
     const config = validateConfig(interpolated);
     const compiled = compileEvents(config, parsed.file);
-    return toResources(compiled);
+    return compiled;
   };
 
-  const baseline = resourcesOf(fileA);
-  const desired = resourcesOf(fileB);
-  const changes = diffResources(desired, baseline);
+  const baseline = configOf(fileA);
+  const desired = configOf(fileB);
+  const changes = diffResources(toResources(desired), toResources(baseline));
+  const configChanges = diffConfigSettings(baseline, desired);
 
   const counts = { create: 0, update: 0, delete: 0 };
   for (const change of changes) counts[change.operation]++;
 
-  return { changes, counts };
+  return { changes, counts, configChanges };
 }
 
 export async function diff(fileA: string, fileB: string, opts: GlobalOptions): Promise<void> {
   try {
     const result = computeDiff(fileA, fileB, opts.env);
     render(result, opts.format);
-    if (result.changes.length > 0) process.exitCode = 2;
+    if (result.changes.length > 0 || result.configChanges.length > 0) process.exitCode = 2;
   } catch (error) {
     printFailure(error);
     process.exitCode = 1;
@@ -63,12 +72,12 @@ export async function diff(fileA: string, fileB: string, opts: GlobalOptions): P
 }
 
 function render(result: DiffResult, format: GlobalOptions['format']): void {
-  if (format === 'json') return console.log(JSON.stringify(buildPlanJson(result) satisfies PlanJson, null, 2));
-  if (format === 'markdown') return console.log(buildPlanMarkdown(result));
+  if (format === 'json') return console.log(JSON.stringify(buildDiffJson(result), null, 2));
+  if (format === 'markdown') return console.log(buildDiffMarkdown(result));
   renderText(result);
 }
 
-function renderText({ changes, counts }: DiffResult): void {
+function renderText({ changes, counts, configChanges }: DiffResult): void {
   console.log('GTM as Code diff\n');
 
   for (const change of changes.filter((c) => c.operation === 'create')) printLine('+', 'create', change);
@@ -77,6 +86,11 @@ function renderText({ changes, counts }: DiffResult): void {
     if (change.operation === 'update') printFieldDiff(change.before.desiredState, change.after.desiredState);
   }
   for (const change of changes.filter((c) => c.operation === 'delete')) printLine('-', 'delete', change);
+
+  if (configChanges.length > 0) {
+    console.log('Configuration declarations (removing a declaration does not reset Google settings):');
+    for (const change of configChanges) console.log(`  ${change.path}: ${describe(change.before)} → ${describe(change.after)}`);
+  }
 
   console.log('Diff:');
   console.log(`  ${counts.create} to create`);
@@ -111,4 +125,34 @@ function describe(value: unknown): string {
   if (value === undefined) return 'undefined';
   if (typeof value === 'string') return value;
   return JSON.stringify(value);
+}
+
+/** Offline declaration comparison; these changes are never passed to the apply resource executor. */
+function diffConfigSettings(before: AnalyticsConfig, after: AnalyticsConfig): ConfigChange[] {
+  const changes: ConfigChange[] = [];
+  const compare = (path: string, a: unknown, b: unknown) => {
+    if (!deepEqual(a, b)) changes.push({ path, ...(a !== undefined ? { before: a } : {}), ...(b !== undefined ? { after: b } : {}) });
+  };
+  compare('gtm.builtInVariables', [...before.gtm.builtInVariables].sort(), [...after.gtm.builtInVariables].sort());
+  for (const key of ['dataRetention', 'googleSignals', 'streamWebsiteUrl', 'attributionSettings', 'enhancedMeasurement'] as const) {
+    compare(`ga4.${key}`, before.ga4[key], after.ga4[key]);
+  }
+  return changes;
+}
+
+export function buildDiffJson(result: DiffResult): PlanJson & { configChanges?: ConfigChange[] } {
+  const json = buildPlanJson(result);
+  return result.configChanges.length > 0
+    ? { ...json, hasChanges: true, configChanges: result.configChanges }
+    : json;
+}
+
+export function buildDiffMarkdown(result: DiffResult): string {
+  if (result.configChanges.length === 0) return buildPlanMarkdown(result);
+  const lines = [result.changes.length > 0 ? buildPlanMarkdown(result) : '**GTM as Code diff**', '',
+    'Configuration declarations (removing a declaration does not reset Google settings):', ''];
+  for (const change of result.configChanges) {
+    lines.push(`- ${change.path}: ${describe(change.before)} → ${describe(change.after)}`);
+  }
+  return lines.join('\n');
 }

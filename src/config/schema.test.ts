@@ -691,3 +691,8 @@ gtm:
     t: { type: conversionLinker, consent: { status: notNeeded } }
 `), ConfigError);
 });
+
+test('gtm.builtInVariables drops repeated names', () => {
+  const config = validate('\ngtm:\n  builtInVariables: ["Click ID", "Page URL", "Click ID"]\n');
+  assert.deepEqual(config.gtm.builtInVariables, ['Click ID', 'Page URL']);
+});

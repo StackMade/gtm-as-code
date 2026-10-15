@@ -118,3 +118,13 @@ test('checkUndeletableKeyEvents ignores non-delete changes and other kinds', () 
   };
   assert.doesNotThrow(() => checkUndeletableKeyEvents([update, deleteDimension], new Set(['purchase', 'lead_type'])));
 });
+
+test('settings-only and built-in-only plans agree across JSON, Markdown and change detection', () => {
+  const settings = resultWith([], { dataRetention: { patch: { eventDataRetention: 'FOURTEEN_MONTHS' }, updateMask: ['eventDataRetention'] } });
+  const builtins = { ...resultWith([]), builtInVariablesToEnable: ['clickId'] };
+  for (const result of [settings, builtins]) {
+    assert.equal(planJsonWithBuiltIns(result).hasChanges, true);
+    assert.doesNotMatch(planMarkdownWithBuiltIns(result), /no changes/i);
+  }
+  assert.equal(planJsonWithBuiltIns(resultWith([], { streamName: 'properties/1/dataStreams/2' })).hasChanges, false);
+});
