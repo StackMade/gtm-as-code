@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { toGtmPayload, fromGtmPayload, SUPPORTED_GTM_TYPES } from './mapping.js';
+import { toGtmPayload, fromGtmPayload, SUPPORTED_GTM_TYPES, TRIGGER_FILTER_OPERATORS } from './mapping.js';
 
 test('dataLayerVariable maps to GTM "v" type and back', () => {
   const gtm = toGtmPayload('variable', 'form', { type: 'dataLayerVariable', variableName: 'form' });
@@ -280,6 +280,61 @@ for (const type of ['pageview', 'domReady', 'windowLoaded', 'click', 'linkClick'
     assert.deepEqual(fromGtmPayload('trigger', gtm), { type });
   });
 }
+
+test('linkClick trigger maps filter to GTM conditions and back', () => {
+  const filter = [{ variable: '{{Click Element}}', operator: 'matchesCssSelector', value: '.contact .links a' }];
+  const gtm = toGtmPayload('trigger', 'profile_click', { type: 'linkClick', filter });
+  assert.deepEqual(gtm, {
+    name: 'profile_click',
+    type: 'linkClick',
+    filter: [
+      {
+        type: 'cssSelector',
+        parameter: [
+          { type: 'template', key: 'arg0', value: '{{Click Element}}' },
+          { type: 'template', key: 'arg1', value: '.contact .links a' },
+        ],
+      },
+    ],
+  });
+  assert.deepEqual(fromGtmPayload('trigger', gtm), { type: 'linkClick', filter });
+});
+
+test('a negated filter condition carries a boolean negate parameter and back', () => {
+  const filter = [{ variable: '{{Page Path}}', operator: 'contains', value: '/admin', negate: true }];
+  const gtm = toGtmPayload('trigger', 'public_pages', { type: 'pageview', filter });
+  const [condition] = gtm.filter as Array<{ parameter: unknown[] }>;
+  assert.deepEqual(condition.parameter[2], { type: 'boolean', key: 'negate', value: 'true' });
+  assert.deepEqual(fromGtmPayload('trigger', gtm), { type: 'pageview', filter });
+});
+
+for (const [operator, conditionType] of Object.entries(TRIGGER_FILTER_OPERATORS)) {
+  test(`filter operator ${operator} maps to GTM condition type ${conditionType} and back`, () => {
+    const filter = [{ variable: '{{Click Text}}', operator, value: 'x' }];
+    const gtm = toGtmPayload('trigger', 't', { type: 'click', filter });
+    assert.equal((gtm.filter as Array<{ type: string }>)[0].type, conditionType);
+    assert.deepEqual(fromGtmPayload('trigger', gtm), { type: 'click', filter });
+  });
+}
+
+test('filter sits beside a customEvent trigger\'s own customEventFilter', () => {
+  const filter = [{ variable: '{{Page Hostname}}', operator: 'equals', value: 'example.com' }];
+  const gtm = toGtmPayload('trigger', 'lead', { type: 'customEvent', eventName: 'generate_lead', filter });
+  assert.ok(gtm.customEventFilter);
+  assert.deepEqual(fromGtmPayload('trigger', gtm), { type: 'customEvent', eventName: 'generate_lead', filter });
+});
+
+test('a live condition type with no readable operator name comes back under the API\'s own name', () => {
+  const gtm = {
+    name: 't',
+    type: 'click',
+    filter: [{ type: 'urlMatches', parameter: [{ type: 'template', key: 'arg0', value: '{{Click URL}}' }, { type: 'template', key: 'arg1', value: 'x' }] }],
+  };
+  assert.deepEqual(fromGtmPayload('trigger', gtm), {
+    type: 'click',
+    filter: [{ variable: '{{Click URL}}', operator: 'urlMatches', value: 'x' }],
+  });
+});
 
 test('elementVisibility trigger maps selector fields and back', () => {
   const gtm = toGtmPayload('trigger', 'visible_cta', { type: 'elementVisibility', selectorType: 'CSS', elementSelector: '.cta' });
