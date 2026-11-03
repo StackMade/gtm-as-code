@@ -583,12 +583,13 @@ function validateResourceMap(
   return result;
 }
 
-const TRIGGER_FILTER_KEYS = ['variable', 'operator', 'value', 'negate'];
+const TRIGGER_FILTER_KEYS = ['variable', 'operator', 'value', 'negate', 'ignoreCase'];
 const TRIGGER_FILTER_OPERATOR_NAMES = Object.keys(TRIGGER_FILTER_OPERATORS);
 
 /**
- * Normalizes as it checks — a number `value` becomes the string GTM stores, and `negate: false` is
- * dropped since GTM leaves it absent — so the reverse mapping of what `apply` wrote compares equal.
+ * Normalizes as it checks — a number `value` becomes the string GTM stores, and `negate: false` /
+ * `ignoreCase: false` are dropped since GTM leaves them absent — so the reverse mapping of what
+ * `apply` wrote compares equal.
  */
 function validateTriggerFilter(parsed: ParsedConfig, raw: unknown, path: string[]): TriggerFilterCondition[] {
   if (!Array.isArray(raw) || raw.length === 0) {
@@ -617,11 +618,21 @@ function validateTriggerFilter(parsed: ParsedConfig, raw: unknown, path: string[
         closestMatch(operator, TRIGGER_FILTER_OPERATOR_NAMES);
       const body = [{ label: 'Unknown operator', value: operator }];
       if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
+      if (operator === 'urlMatches') body.push({ label: 'Note', value: 'urlMatches is a GTM condition type gtm-as-code does not support yet' });
       fail(parsed, [...conditionPath, 'operator'], body);
     }
-    const value = typeof def.value === 'number' ? String(def.value) : requireString(parsed, def.value, [...conditionPath, 'value']);
+    // An empty string is a valid right-hand side ("Click URL equals" nothing), so it skips requireString.
+    const value =
+      typeof def.value === 'number' ? String(def.value) : def.value === '' ? '' : requireString(parsed, def.value, [...conditionPath, 'value']);
     const negate = def.negate !== undefined ? requireBoolean(parsed, def.negate, [...conditionPath, 'negate']) : false;
-    return { variable, operator, value, ...(negate ? { negate } : {}) };
+    const ignoreCase = def.ignoreCase !== undefined ? requireBoolean(parsed, def.ignoreCase, [...conditionPath, 'ignoreCase']) : false;
+    if (ignoreCase && operator !== 'matchesRegex') {
+      fail(parsed, [...conditionPath, 'ignoreCase'], [
+        { label: 'Expected', value: 'ignoreCase only with operator matchesRegex' },
+        { label: 'Received', value: `operator ${operator}` },
+      ]);
+    }
+    return { variable, operator, value, ...(negate ? { negate } : {}), ...(ignoreCase ? { ignoreCase } : {}) };
   });
 }
 

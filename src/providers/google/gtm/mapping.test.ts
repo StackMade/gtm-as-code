@@ -488,3 +488,19 @@ test('every type in SUPPORTED_GTM_TYPES has a payload mapping', () => {
     }
   }
 });
+
+test('an ignoreCase filter condition carries a boolean ignore_case parameter and back', () => {
+  const filter = [{ variable: '{{Click Text}}', operator: 'matchesRegex', value: 'kontakt', ignoreCase: true }];
+  const gtm = toGtmPayload('trigger', 't', { type: 'click', filter });
+  const [condition] = gtm.filter as Array<{ parameter: unknown[] }>;
+  assert.deepEqual(condition.parameter[2], { type: 'boolean', key: 'ignore_case', value: 'true' });
+  assert.deepEqual(fromGtmPayload('trigger', gtm), { type: 'click', filter });
+});
+
+test('a live condition with no arg1 value comes back as an empty value', () => {
+  const gtm = { name: 't', type: 'click', filter: [{ type: 'equals', parameter: [{ type: 'template', key: 'arg0', value: '{{Click URL}}' }, { type: 'template', key: 'arg1' }] }] };
+  assert.deepEqual(fromGtmPayload('trigger', gtm), {
+    type: 'click',
+    filter: [{ variable: '{{Click URL}}', operator: 'equals', value: '' }],
+  });
+});

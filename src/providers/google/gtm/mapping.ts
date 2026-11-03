@@ -79,6 +79,8 @@ export interface TriggerFilterCondition {
   operator: string;
   value: string;
   negate?: boolean;
+  /** Only on `matchesRegex`: GTM's "matches RegEx (ignore case)". */
+  ignoreCase?: boolean;
 }
 
 /** A trigger's `filter` -> GTM's `filter`: conditions that must all hold for the trigger to fire. */
@@ -92,6 +94,7 @@ function resolveTriggerFilter(desiredState: Record<string, unknown>): GtmObject 
         { type: 'template', key: 'arg0', value: condition.variable },
         { type: 'template', key: 'arg1', value: condition.value },
         ...(condition.negate ? [{ type: 'boolean', key: 'negate', value: 'true' }] : []),
+        ...(condition.ignoreCase ? [{ type: 'boolean', key: 'ignore_case', value: 'true' }] : []),
       ],
     })),
   };
@@ -110,8 +113,10 @@ function recoverTriggerFilter(object: GtmObject): Record<string, unknown> {
       return {
         variable: arg('arg0'),
         operator: TRIGGER_FILTER_OPERATOR_NAMES[condition.type] ?? condition.type,
-        value: arg('arg1'),
+        // An empty right-hand side ("Click URL equals" nothing) may come back with no value at all.
+        value: arg('arg1') ?? '',
         ...(arg('negate') === 'true' ? { negate: true } : {}),
+        ...(arg('ignore_case') === 'true' ? { ignoreCase: true } : {}),
       };
     }),
   };

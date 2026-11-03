@@ -776,6 +776,54 @@ gtm:
   assert.throws(() => validate(`
 gtm:
   triggers:
-    t: { type: click, filter: [{ variable: '{{Click Element}}', operator: equals, value: a, ignoreCase: true }] }
+    t: { type: click, filter: [{ variable: '{{Click Element}}', operator: equals, value: a, caseSensitive: true }] }
 `), /Unknown property/);
+});
+
+test('a trigger filter takes ignoreCase on matchesRegex and an empty value', () => {
+  const config = validate(`
+gtm:
+  triggers:
+    t:
+      type: click
+      filter:
+        - { variable: '{{Click Text}}', operator: matchesRegex, value: 'kontakt', ignoreCase: true }
+        - { variable: '{{Click URL}}', operator: equals, value: '', negate: true, ignoreCase: false }
+`);
+  assert.deepEqual(config.gtm.triggers.t.filter, [
+    { variable: '{{Click Text}}', operator: 'matchesRegex', value: 'kontakt', ignoreCase: true },
+    { variable: '{{Click URL}}', operator: 'equals', value: '', negate: true },
+  ]);
+});
+
+test('ignoreCase on an operator other than matchesRegex fails validation', () => {
+  assert.throws(
+    () =>
+      validate(`
+gtm:
+  triggers:
+    t: { type: click, filter: [{ variable: '{{Click Text}}', operator: contains, value: a, ignoreCase: true }] }
+`),
+    (error: unknown) => {
+      assert.ok(error instanceof ConfigError);
+      assert.equal(error.path, 'gtm.triggers.t.filter.0.ignoreCase');
+      return true;
+    },
+  );
+});
+
+test('a urlMatches operator says it is not supported yet', () => {
+  assert.throws(
+    () =>
+      validate(`
+gtm:
+  triggers:
+    t: { type: click, filter: [{ variable: '{{Click URL}}', operator: urlMatches, value: a }] }
+`),
+    (error: unknown) => {
+      assert.ok(error instanceof ConfigError);
+      assert.match(error.body.at(-1)?.value ?? '', /not support yet/);
+      return true;
+    },
+  );
 });

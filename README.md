@@ -323,14 +323,16 @@ gtm:
     <name>: { type: string, folder: string, protected: boolean, ... }
   triggers:
     <name>: { type: string, folder: string, protected: boolean,
-               filter: [{ variable: string, operator: string, value: string, negate: boolean }, ...], ... }
+               filter: [{ variable: string, operator: string, value: string, negate: boolean,
+                          ignoreCase: boolean }, ...], ... }
       # a bare "consentInit" trigger (no extra fields) fires before every other trigger
       # filter (optional, on any trigger type) maps to GTM's filter: conditions that must all hold
       #   for the trigger to fire, e.g. a linkClick on { variable: "{{Click Element}}",
       #   operator: matchesCssSelector, value: ".nav a" }. variable is a {{…}} reference; operator
       #   is equals | contains | startsWith | endsWith | matchesRegex | matchesCssSelector |
       #   greaterThan | greaterOrEquals | lessThan | lessOrEquals; negate (optional) inverts it,
-      #   so contains + negate: true is GTM's "does not contain"
+      #   so contains + negate: true is GTM's "does not contain"; ignoreCase (optional, matchesRegex
+      #   only) is GTM's "matches RegEx (ignore case)"; value may be "" to match an empty variable
   tags:
     <name>: { type: string, trigger: [string, ...], exceptTrigger: [string, ...],
                setupTags: [string, ...], teardownTags: [string, ...], folder: string,
