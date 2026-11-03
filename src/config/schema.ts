@@ -3,7 +3,7 @@ import { locateLine, locateFile, type ParsedConfig } from './parser.js';
 import { closestMatch } from './suggest.js';
 import { BUILT_IN_VARIABLE_NAMES } from '../providers/google/gtm/builtin-variables.js';
 import { BUILT_IN_TRIGGERS, BUILT_IN_TRIGGER_NAMES } from '../providers/google/gtm/builtin-triggers.js';
-import { SUPPORTED_GTM_TYPES } from '../providers/google/gtm/mapping.js';
+import { SUPPORTED_GTM_TYPES, TRIGGER_FILTER_OPERATORS, type TriggerFilterCondition } from '../providers/google/gtm/mapping.js';
 
 export interface EventParameterDef {
   /** `items` is GA4's ecommerce item array (view_item, add_to_cart, purchase, ...). */
@@ -570,9 +570,70 @@ function validateResourceMap(
     requireSupportedType(parsed, kind, type, [...itemPath, 'type']);
     const folder = def.folder !== undefined ? requireString(parsed, def.folder, [...itemPath, 'folder']) : undefined;
     const isProtected = def.protected !== undefined ? requireBoolean(parsed, def.protected, [...itemPath, 'protected']) : undefined;
-    result[name] = { ...def, type, folder, ...(isProtected !== undefined ? { protected: isProtected } : {}) };
+    const filter =
+      kind === 'trigger' && def.filter !== undefined ? validateTriggerFilter(parsed, def.filter, [...itemPath, 'filter']) : undefined;
+    result[name] = {
+      ...def,
+      type,
+      folder,
+      ...(isProtected !== undefined ? { protected: isProtected } : {}),
+      ...(filter !== undefined ? { filter } : {}),
+    };
   }
   return result;
+}
+
+const TRIGGER_FILTER_KEYS = ['variable', 'operator', 'value', 'negate', 'ignoreCase'];
+const TRIGGER_FILTER_OPERATOR_NAMES = Object.keys(TRIGGER_FILTER_OPERATORS);
+
+/**
+ * Normalizes as it checks — a number `value` becomes the string GTM stores, and `negate: false` /
+ * `ignoreCase: false` are dropped since GTM leaves them absent — so the reverse mapping of what
+ * `apply` wrote compares equal.
+ */
+function validateTriggerFilter(parsed: ParsedConfig, raw: unknown, path: string[]): TriggerFilterCondition[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    fail(parsed, path, [
+      { label: 'Expected', value: 'a non-empty array of conditions' },
+      { label: 'Received', value: Array.isArray(raw) ? 'empty array' : describeType(raw) },
+    ]);
+  }
+  return raw.map((item, index) => {
+    const conditionPath = [...path, String(index)];
+    const def = requireObject(parsed, item, conditionPath);
+    checkUnknownKeys(parsed, def, TRIGGER_FILTER_KEYS, conditionPath);
+    const variable = requireString(parsed, def.variable, [...conditionPath, 'variable']);
+    if (!/^\{\{[^{}]+\}\}$/.test(variable)) {
+      fail(parsed, [...conditionPath, 'variable'], [
+        { label: 'Expected', value: 'a variable reference in {{…}} form, e.g. "{{Click Element}}"' },
+        { label: 'Received', value: variable },
+      ]);
+    }
+    const operator = requireString(parsed, def.operator, [...conditionPath, 'operator']);
+    if (!TRIGGER_FILTER_OPERATOR_NAMES.includes(operator)) {
+      // The GTM API's own names (`cssSelector`, `matchRegex`) are too far from the readable ones for
+      // an edit-distance match, so they are looked up directly.
+      const suggestion =
+        TRIGGER_FILTER_OPERATOR_NAMES.find((name) => TRIGGER_FILTER_OPERATORS[name] === operator) ??
+        closestMatch(operator, TRIGGER_FILTER_OPERATOR_NAMES);
+      const body = [{ label: 'Unknown operator', value: operator }];
+      if (suggestion) body.push({ label: 'Did you mean', value: suggestion });
+      if (operator === 'urlMatches') body.push({ label: 'Note', value: 'urlMatches is a GTM condition type gtm-as-code does not support yet' });
+      fail(parsed, [...conditionPath, 'operator'], body);
+    }
+    // An empty string is a valid right-hand side ("Click URL equals" nothing), so it skips requireString.
+    const value =
+      typeof def.value === 'number' ? String(def.value) : def.value === '' ? '' : requireString(parsed, def.value, [...conditionPath, 'value']);
+    const negate = def.negate !== undefined ? requireBoolean(parsed, def.negate, [...conditionPath, 'negate']) : false;
+    const ignoreCase = def.ignoreCase !== undefined ? requireBoolean(parsed, def.ignoreCase, [...conditionPath, 'ignoreCase']) : false;
+    if (ignoreCase && operator !== 'matchesRegex') {
+      fail(parsed, [...conditionPath, 'ignoreCase'], [
+        { label: 'Expected', value: 'ignoreCase only with operator matchesRegex' },
+        { label: 'Received', value: `operator ${operator}` },
+      ]);
+    }
+    return { variable, operator, value, ...(negate ? { negate } : {}), ...(ignoreCase ? { ignoreCase } : {}) };
+  });
 }
 
 function validateTagMap(parsed: ParsedConfig, raw: unknown, path: string[]): Record<string, TagDef> {

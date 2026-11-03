@@ -322,8 +322,17 @@ gtm:
   variables:
     <name>: { type: string, folder: string, protected: boolean, ... }
   triggers:
-    <name>: { type: string, folder: string, protected: boolean, ... }
+    <name>: { type: string, folder: string, protected: boolean,
+               filter: [{ variable: string, operator: string, value: string, negate: boolean,
+                          ignoreCase: boolean }, ...], ... }
       # a bare "consentInit" trigger (no extra fields) fires before every other trigger
+      # filter (optional, on any trigger type) maps to GTM's filter: conditions that must all hold
+      #   for the trigger to fire, e.g. a linkClick on { variable: "{{Click Element}}",
+      #   operator: matchesCssSelector, value: ".nav a" }. variable is a {{…}} reference; operator
+      #   is equals | contains | startsWith | endsWith | matchesRegex | matchesCssSelector |
+      #   greaterThan | greaterOrEquals | lessThan | lessOrEquals; negate (optional) inverts it,
+      #   so contains + negate: true is GTM's "does not contain"; ignoreCase (optional, matchesRegex
+      #   only) is GTM's "matches RegEx (ignore case)"; value may be "" to match an empty variable
   tags:
     <name>: { type: string, trigger: [string, ...], exceptTrigger: [string, ...],
                setupTags: [string, ...], teardownTags: [string, ...], folder: string,
@@ -435,7 +444,8 @@ ga4:
 On `gtm.variables`, `gtm.triggers` and `gtm.tags` entries, `validate` checks `type` against the
 types this tool can actually build a GTM payload for, and suggests the nearest name when it doesn't
 recognize one, so an unsupported or misspelled type fails offline rather than part-way through an
-`apply`. For tags it also checks `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`.
+`apply`. For tags it also checks `trigger`/`exceptTrigger`/`setupTags`/`teardownTags`, and for
+triggers each `filter` condition's keys, its `{{…}}` variable and its operator.
 Per-resource-type property shapes aren't validated yet: a `dataLayerVariable` missing its `variableName` still gets as
 far as the API.
 

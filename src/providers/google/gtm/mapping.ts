@@ -15,7 +15,7 @@ export interface MappingContext {
   folderGtmIds?: Record<string, string>;
 }
 
-/** Trigger types with no configurable fields — the GTM `type` string alone is the payload. */
+/** Trigger types with no configurable fields of their own — the GTM `type` string, plus any `filter`, is the payload. */
 const BARE_TRIGGER_TYPES = [
   'pageview',
   'domReady',
@@ -52,6 +52,75 @@ export const SUPPORTED_GTM_TYPES: Record<'variable' | 'trigger' | 'tag', readonl
   trigger: [...BARE_TRIGGER_TYPES, 'elementVisibility', 'timer', 'triggerGroup', 'customEvent'],
   tag: ['customHtml', 'customImage', 'ga4Event', 'googleTag'],
 };
+
+/**
+ * A trigger `filter` entry's `operator` -> the GTM API's `Condition.type`. Readable names on the
+ * left, the API's own enum on the right, checked against the Tag Manager API v2 discovery document.
+ * `urlMatches` is left out: it has no counterpart in the GTM UI's condition list to say what it does.
+ * A negated operator ("does not contain") is the same type with `negate: true`.
+ */
+export const TRIGGER_FILTER_OPERATORS: Record<string, string> = {
+  equals: 'equals',
+  contains: 'contains',
+  startsWith: 'startsWith',
+  endsWith: 'endsWith',
+  matchesRegex: 'matchRegex',
+  matchesCssSelector: 'cssSelector',
+  greaterThan: 'greater',
+  greaterOrEquals: 'greaterOrEquals',
+  lessThan: 'less',
+  lessOrEquals: 'lessOrEquals',
+};
+
+const TRIGGER_FILTER_OPERATOR_NAMES = Object.fromEntries(Object.entries(TRIGGER_FILTER_OPERATORS).map(([name, type]) => [type, name]));
+
+export interface TriggerFilterCondition {
+  variable: string;
+  operator: string;
+  value: string;
+  negate?: boolean;
+  /** Only on `matchesRegex`: GTM's "matches RegEx (ignore case)". */
+  ignoreCase?: boolean;
+}
+
+/** A trigger's `filter` -> GTM's `filter`: conditions that must all hold for the trigger to fire. */
+function resolveTriggerFilter(desiredState: Record<string, unknown>): GtmObject {
+  const filter = desiredState.filter as TriggerFilterCondition[] | undefined;
+  if (!filter || filter.length === 0) return {};
+  return {
+    filter: filter.map((condition) => ({
+      type: TRIGGER_FILTER_OPERATORS[condition.operator],
+      parameter: [
+        { type: 'template', key: 'arg0', value: condition.variable },
+        { type: 'template', key: 'arg1', value: condition.value },
+        ...(condition.negate ? [{ type: 'boolean', key: 'negate', value: 'true' }] : []),
+        ...(condition.ignoreCase ? [{ type: 'boolean', key: 'ignore_case', value: 'true' }] : []),
+      ],
+    })),
+  };
+}
+
+/**
+ * Recovers a trigger's `filter` from GTM's. An operator with no readable name (`urlMatches`) comes
+ * back as the API's own name, so `validate` names it rather than the condition silently vanishing.
+ */
+function recoverTriggerFilter(object: GtmObject): Record<string, unknown> {
+  const filter = object.filter as Array<{ type: string; parameter?: GtmParam[] }> | undefined;
+  if (!filter || filter.length === 0) return {};
+  return {
+    filter: filter.map((condition) => {
+      const arg = (key: string) => condition.parameter?.find((p) => p.key === key)?.value;
+      return {
+        variable: arg('arg0'),
+        operator: TRIGGER_FILTER_OPERATOR_NAMES[condition.type] ?? condition.type,
+        // An empty right-hand side ("Click URL equals" nothing) may come back with no value at all.
+        value: arg('arg1') ?? '',
+        ...(arg('negate') === 'true' ? { negate: true } : {}),
+        ...(arg('ignore_case') === 'true' ? { ignoreCase: true } : {}),
+      };
+    }),
+  };
+}
 
 /** Firing behavior shared by every tag type: priority, once-per-X, scheduling, setup/teardown tags. */
 function resolveTagFiringBehavior(desiredState: Record<string, unknown>): GtmObject {
@@ -146,6 +215,7 @@ export function toGtmPayload(
 
   let payload = toGtmPayloadByType(kind, resourceId, desiredState, context);
   if (kind === 'tag') payload = { ...payload, ...resolveTagFiringBehavior(desiredState) };
+  if (kind === 'trigger') payload = { ...payload, ...resolveTriggerFilter(desiredState) };
   const folder = desiredState.folder as string | undefined;
   const parentFolderId = folder ? context.folderGtmIds?.[folder] : undefined;
   return parentFolderId ? { ...payload, parentFolderId } : payload;
@@ -378,6 +448,7 @@ export function fromGtmPayload(kind: GtmKind, object: GtmObject, context: Revers
 
   let desiredState = fromGtmPayloadByType(kind, object, context);
   if (kind === 'tag') desiredState = { ...desiredState, ...recoverTagFiringBehavior(object) };
+  if (kind === 'trigger') desiredState = { ...desiredState, ...recoverTriggerFilter(object) };
   const parentFolderId = object.parentFolderId as string | undefined;
   const folder = parentFolderId ? context.folderGtmIdToLogicalId?.[parentFolderId] : undefined;
   return folder ? { ...desiredState, folder } : desiredState;

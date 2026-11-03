@@ -710,3 +710,120 @@ test('a non-numeric account, container or property id fails validation before it
     );
   }
 });
+
+test('a trigger filter passes validation and is normalized to what GTM stores', () => {
+  const config = validate(`
+gtm:
+  triggers:
+    profile_click:
+      type: linkClick
+      filter:
+        - { variable: '{{Click Element}}', operator: matchesCssSelector, value: '.contact a' }
+        - { variable: '{{Scroll Depth Threshold}}', operator: greaterThan, value: 50, negate: false }
+`);
+  assert.deepEqual(config.gtm.triggers.profile_click.filter, [
+    { variable: '{{Click Element}}', operator: 'matchesCssSelector', value: '.contact a' },
+    { variable: '{{Scroll Depth Threshold}}', operator: 'greaterThan', value: '50' },
+  ]);
+});
+
+for (const [operator, suggestion] of [
+  ['cssSelector', 'matchesCssSelector'],
+  ['matchRegex', 'matchesRegex'],
+  ['contians', 'contains'],
+]) {
+  test(`an unknown trigger filter operator "${operator}" suggests "${suggestion}"`, () => {
+    assert.throws(
+      () =>
+        validate(`
+gtm:
+  triggers:
+    t: { type: click, filter: [{ variable: '{{Click Element}}', operator: ${operator}, value: a }] }
+`),
+      (error: unknown) => {
+        assert.ok(error instanceof ConfigError);
+        assert.match(error.message, /Unknown operator/);
+        assert.deepEqual(error.body.at(-1), { label: 'Did you mean', value: suggestion });
+        return true;
+      },
+    );
+  });
+}
+
+test('a trigger filter variable outside {{…}} fails validation', () => {
+  assert.throws(
+    () =>
+      validate(`
+gtm:
+  triggers:
+    t: { type: click, filter: [{ variable: Click Element, operator: equals, value: a }] }
+`),
+    (error: unknown) => {
+      assert.ok(error instanceof ConfigError);
+      assert.equal(error.path, 'gtm.triggers.t.filter.0.variable');
+      assert.match(error.message, /\{\{…\}\} form/);
+      return true;
+    },
+  );
+});
+
+test('an empty trigger filter or an unknown condition key fails validation', () => {
+  assert.throws(() => validate(`
+gtm:
+  triggers:
+    t: { type: click, filter: [] }
+`), ConfigError);
+  assert.throws(() => validate(`
+gtm:
+  triggers:
+    t: { type: click, filter: [{ variable: '{{Click Element}}', operator: equals, value: a, caseSensitive: true }] }
+`), /Unknown property/);
+});
+
+test('a trigger filter takes ignoreCase on matchesRegex and an empty value', () => {
+  const config = validate(`
+gtm:
+  triggers:
+    t:
+      type: click
+      filter:
+        - { variable: '{{Click Text}}', operator: matchesRegex, value: 'kontakt', ignoreCase: true }
+        - { variable: '{{Click URL}}', operator: equals, value: '', negate: true, ignoreCase: false }
+`);
+  assert.deepEqual(config.gtm.triggers.t.filter, [
+    { variable: '{{Click Text}}', operator: 'matchesRegex', value: 'kontakt', ignoreCase: true },
+    { variable: '{{Click URL}}', operator: 'equals', value: '', negate: true },
+  ]);
+});
+
+test('ignoreCase on an operator other than matchesRegex fails validation', () => {
+  assert.throws(
+    () =>
+      validate(`
+gtm:
+  triggers:
+    t: { type: click, filter: [{ variable: '{{Click Text}}', operator: contains, value: a, ignoreCase: true }] }
+`),
+    (error: unknown) => {
+      assert.ok(error instanceof ConfigError);
+      assert.equal(error.path, 'gtm.triggers.t.filter.0.ignoreCase');
+      return true;
+    },
+  );
+});
+
+test('a urlMatches operator says it is not supported yet', () => {
+  assert.throws(
+    () =>
+      validate(`
+gtm:
+  triggers:
+    t: { type: click, filter: [{ variable: '{{Click URL}}', operator: urlMatches, value: a }] }
+`),
+    (error: unknown) => {
+      assert.ok(error instanceof ConfigError);
+      assert.match(error.body.at(-1)?.value ?? '', /not support yet/);
+      return true;
+    },
+  );
+});
