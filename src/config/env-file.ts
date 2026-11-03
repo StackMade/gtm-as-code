@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { ALLOW_ENV_VAR } from './interpolation.js';
 
 /** Same shape as the config candidates in `loader.ts`, and the paths `init` scaffolds. */
 const DEFAULT_CANDIDATES = ['.env.analytics', 'analytics/.env.analytics'];
@@ -16,16 +17,26 @@ export function loadEnvFile(explicitPath?: string, cwd: string = process.cwd()):
   if (explicitPath) {
     const path = resolve(cwd, explicitPath);
     if (!existsSync(path)) throw new Error(`Env file not found: ${explicitPath}`);
-    process.loadEnvFile(path);
+    loadFile(path);
     return path;
   }
   for (const candidate of DEFAULT_CANDIDATES) {
     const path = resolve(cwd, candidate);
     if (!existsSync(path)) continue;
-    process.loadEnvFile(path);
+    loadFile(path);
     return path;
   }
   return undefined;
+}
+
+/** An env file can sit in a pull request, so it must not widen what the config may interpolate. */
+function loadFile(path: string): void {
+  const before = process.env[ALLOW_ENV_VAR];
+  process.loadEnvFile(path);
+  if (process.env[ALLOW_ENV_VAR] !== before) {
+    delete process.env[ALLOW_ENV_VAR];
+    throw new Error(`${ALLOW_ENV_VAR} cannot be set in an env file (${path}). Set it in the shell or the workflow's env: block.`);
+  }
 }
 
 /**

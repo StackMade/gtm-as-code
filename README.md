@@ -153,6 +153,15 @@ accountId: "${GTM_ACCOUNT_ID}"
 propertyId: "${GA4_PROPERTY_ID:-123456789}"   # with a default
 ```
 
+Only names starting with `GTM_`, `GA4_` or `ANALYTICS_` resolve. Any other name fails validation
+unless it is listed in `GTM_CODE_ALLOW_ENV` (comma-separated), for example
+`GTM_CODE_ALLOW_ENV=CONTAINER_ID,SITE_URL`. Set that variable in the shell or in the workflow's
+`env:` block. An env file cannot set it. The limit exists because `validate` and `plan` print config
+values, so a pull request that could interpolate any variable could print a CI secret into the job
+log.
+The prefixes are the whole check, so don't give a real secret a `GTM_`, `GA4_` or `ANALYTICS_`
+name (a Measurement Protocol secret as `GA4_API_SECRET`, say). The config could interpolate it.
+
 A reference with no default that resolves to an unset variable fails validation. Keep real
 account, container, and property IDs, and any secrets, out of the YAML. Put them in environment
 variables instead, as `init`'s scaffold does.
