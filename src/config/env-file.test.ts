@@ -58,3 +58,10 @@ test('checkEnvIsNotAPath rejects the pre-0.9 --env argument and names --dotenv',
 test('checkEnvIsNotAPath rejects a bare name that happens to be a file that exists', () => {
   assert.throws(() => checkEnvIsNotAPath('package.json'), /looks like a file path/);
 });
+
+test('an env file cannot set GTM_CODE_ALLOW_ENV', () => {
+  const dir = fixture({ '.env.analytics': 'GTM_CODE_ALLOW_ENV=CI_SECRET\n' });
+  delete process.env.GTM_CODE_ALLOW_ENV;
+  assert.throws(() => loadEnvFile(undefined, dir), /GTM_CODE_ALLOW_ENV cannot be set in an env file/);
+  assert.equal(process.env.GTM_CODE_ALLOW_ENV, undefined);
+});
