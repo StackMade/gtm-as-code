@@ -71,11 +71,15 @@ test('an env file cannot set variables outside the interpolation allowlist', (t)
   const dir = fixture({ '.env.analytics': 'GTM_ENV_FILE_TEST_D=kept\nGOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES=1\nHTTPS_PROXY=http://evil.test\n' });
   delete process.env.GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES;
   const proxyBefore = process.env.HTTPS_PROXY;
+  delete process.env.HTTPS_PROXY;
+  t.after(() => {
+    if (proxyBefore !== undefined) process.env.HTTPS_PROXY = proxyBefore;
+  });
   loadEnvFile(undefined, dir);
   assert.equal(process.env.GTM_ENV_FILE_TEST_D, 'kept');
   assert.equal(process.env.GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES, undefined);
-  assert.equal(process.env.HTTPS_PROXY, proxyBefore);
-  assert.match(String(warn.mock.calls[0].arguments[0]), /GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES, HTTPS_PROXY/);
+  assert.equal(process.env.HTTPS_PROXY, undefined);
+  assert.match(String(warn.mock.calls[0].arguments[0]), /GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES, HTTPS_PROXY[\s\S]*Why:[\s\S]*Fix:/);
   assert.doesNotMatch(String(warn.mock.calls[0].arguments[0]), /evil\.test/);
   delete process.env.GTM_ENV_FILE_TEST_D;
 });
@@ -87,4 +91,14 @@ test('a name opted in through GTM_CODE_ALLOW_ENV can come from an env file', () 
   assert.equal(process.env.CONTAINER_ID_ENV_TEST, '7');
   delete process.env.GTM_CODE_ALLOW_ENV;
   delete process.env.CONTAINER_ID_ENV_TEST;
+});
+
+test('a disallowed name already set in the environment does not warn', (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const dir = fixture({ '.env.analytics': 'OTHER_ENV_FILE_TEST=from_file\n' });
+  process.env.OTHER_ENV_FILE_TEST = 'from_environment';
+  loadEnvFile(undefined, dir);
+  assert.equal(process.env.OTHER_ENV_FILE_TEST, 'from_environment');
+  assert.equal(warn.mock.callCount(), 0);
+  delete process.env.OTHER_ENV_FILE_TEST;
 });

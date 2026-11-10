@@ -38,5 +38,5 @@ test('GTM_CODE_ALLOW_ENV opts a named variable in', () => {
 });
 
 test('a __proto__ key is rejected instead of hiding its subtree from validation', () => {
-  assert.throws(() => resolveWith('project:\n  __proto__:\n    name: x\n', {}), /project\.__proto__[\s\S]*Not allowed/);
+  assert.throws(() => resolveWith('project:\n  __proto__:\n    name: x\n', {}), /project\.__proto__[\s\S]*Not allowed[\s\S]*Fix:/);
 });

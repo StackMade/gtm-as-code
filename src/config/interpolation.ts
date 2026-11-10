@@ -42,6 +42,8 @@ function interpolateValue(
       if (key === '__proto__') {
         throw new ConfigError(locateFile(parsed, path), locateLine(parsed, path), [...path, key].join('.'), [
           { label: 'Not allowed', value: 'a key named __proto__' },
+          { label: 'Why', value: 'it would hide everything under it from validation' },
+          { label: 'Fix', value: 'rename or remove this key' },
         ]);
       }
       result[key] = interpolateValue(item, [...path, key], parsed, env);

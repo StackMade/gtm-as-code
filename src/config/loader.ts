@@ -150,7 +150,10 @@ function resolveExtends(parsed: ParsedConfig, visited: Set<string>, root: string
     if (!isInside(root, realIncludePath)) {
       throw new ConfigError(parsed.file, undefined, 'extends', [
         { label: 'Include outside the project', value: rel },
+        ...(realIncludePath !== includePath ? [{ label: 'Resolves to', value: realIncludePath }] : []),
         { label: 'Allowed', value: `files under ${root}` },
+        { label: 'Why', value: 'since 0.11.1 extends: cannot leave the git checkout, because a pull request can change this path' },
+        { label: 'Fix', value: 'copy the file into the project and extend it by a relative path, for example ./packs/shared.yaml' },
       ]);
     }
 

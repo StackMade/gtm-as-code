@@ -44,10 +44,20 @@ function loadFile(path: string): void {
   const ignored: string[] = [];
   for (const [name, value] of Object.entries(entries)) {
     if (isAllowed(name, process.env)) process.env[name] ??= value;
-    else ignored.push(name);
+    // An already-set variable would have won over the file anyway, so nothing changed for it.
+    else if (process.env[name] === undefined) ignored.push(name);
   }
   if (ignored.length > 0) {
-    console.warn(`Ignored in ${path}: ${ignored.join(', ')}. An env file may only set names the config can interpolate; set anything else in the shell or the workflow's env: block.`);
+    console.warn(
+      [
+        `Warning: ignoring variables from ${path}:`,
+        `  ${ignored.join(', ')}`,
+        '',
+        `Why: since 0.11.1 an env file can only set names the config may interpolate (GTM_, GA4_, ANALYTICS_, or listed in ${ALLOW_ENV_VAR}), because an env file can arrive in a pull request.`,
+        `Fix: set them in the shell or the workflow's env: block. To use one as \${NAME} in the config, also list it in ${ALLOW_ENV_VAR}.`,
+        '',
+      ].join('\n'),
+    );
   }
 }
 

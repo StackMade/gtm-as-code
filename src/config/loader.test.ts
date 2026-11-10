@@ -220,7 +220,7 @@ test('loadConfig rejects an extends target outside the project', () => {
   const { project } = projectWithSecretOutside();
   writeFileSync(join(project, 'analytics.yaml'), `${ROOT_HEADER}extends: ../secret.txt\n`);
   assert.throws(() => loadConfig(join(project, 'analytics.yaml')), (error: Error) => {
-    assert.match(error.message, /Include outside the project/);
+    assert.match(error.message, /Include outside the project[\s\S]*Why:[\s\S]*Fix:/);
     assert.doesNotMatch(error.message, /hunter2/);
     return true;
   });
