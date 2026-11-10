@@ -36,3 +36,7 @@ test('GTM_CODE_ALLOW_ENV opts a named variable in', () => {
   const env = { GTM_CODE_ALLOW_ENV: 'OTHER, CONTAINER_ID', CONTAINER_ID: '7' };
   assert.deepEqual(resolveWith('a: "${CONTAINER_ID}"\n', env), { a: '7' });
 });
+
+test('a __proto__ key is rejected instead of hiding its subtree from validation', () => {
+  assert.throws(() => resolveWith('project:\n  __proto__:\n    name: x\n', {}), /project\.__proto__[\s\S]*Not allowed/);
+});

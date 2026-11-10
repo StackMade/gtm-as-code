@@ -12,7 +12,7 @@ const VAR_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}/g;
 const ALLOWED_PREFIXES = ['GTM_', 'GA4_', 'ANALYTICS_'];
 export const ALLOW_ENV_VAR = 'GTM_CODE_ALLOW_ENV';
 
-function isAllowed(name: string, env: NodeJS.ProcessEnv): boolean {
+export function isAllowed(name: string, env: NodeJS.ProcessEnv): boolean {
   if (ALLOWED_PREFIXES.some((prefix) => name.startsWith(prefix))) return true;
   return (env[ALLOW_ENV_VAR] ?? '').split(',').map((entry) => entry.trim()).includes(name);
 }
@@ -38,6 +38,12 @@ function interpolateValue(
   if (value && typeof value === 'object') {
     const result: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
+      // Assigning this key sets the prototype, which hides the subtree from validateConfig's own-key checks.
+      if (key === '__proto__') {
+        throw new ConfigError(locateFile(parsed, path), locateLine(parsed, path), [...path, key].join('.'), [
+          { label: 'Not allowed', value: 'a key named __proto__' },
+        ]);
+      }
       result[key] = interpolateValue(item, [...path, key], parsed, env);
     }
     return result;

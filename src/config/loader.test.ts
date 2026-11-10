@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from './loader.js';
@@ -205,4 +205,49 @@ test('loadConfig rejects --env against a config with no environments block', () 
   writeFileSync(file, ROOT_HEADER);
 
   assert.throws(() => loadConfig(file, 'staging'), ConfigError);
+});
+
+function projectWithSecretOutside(): { project: string; secret: string } {
+  const dir = tempDir();
+  const project = join(dir, 'project');
+  mkdirSync(join(project, '.git'), { recursive: true });
+  const secret = join(dir, 'secret.txt');
+  writeFileSync(secret, 'API_KEY: super: hunter2\n');
+  return { project, secret };
+}
+
+test('loadConfig rejects an extends target outside the project', () => {
+  const { project } = projectWithSecretOutside();
+  writeFileSync(join(project, 'analytics.yaml'), `${ROOT_HEADER}extends: ../secret.txt\n`);
+  assert.throws(() => loadConfig(join(project, 'analytics.yaml')), (error: Error) => {
+    assert.match(error.message, /Include outside the project/);
+    assert.doesNotMatch(error.message, /hunter2/);
+    return true;
+  });
+});
+
+test('loadConfig rejects a symlink that leaves the project', () => {
+  const { project, secret } = projectWithSecretOutside();
+  symlinkSync(secret, join(project, 'pack.yaml'));
+  writeFileSync(join(project, 'analytics.yaml'), `${ROOT_HEADER}extends: pack.yaml\n`);
+  assert.throws(() => loadConfig(join(project, 'analytics.yaml')), /Include outside the project/);
+});
+
+test('loadConfig allows an extends target above the config inside the same checkout', () => {
+  const { project } = projectWithSecretOutside();
+  mkdirSync(join(project, 'analytics'));
+  writeFileSync(join(project, 'pack.yaml'), 'events:\n  add_to_cart:\n    parameters: {}\n');
+  writeFileSync(join(project, 'analytics', 'analytics.yaml'), `${ROOT_HEADER}extends: ../pack.yaml\n`);
+  const data = loadConfig(join(project, 'analytics', 'analytics.yaml')).data as { events: Record<string, unknown> };
+  assert.deepEqual(Object.keys(data.events), ['add_to_cart']);
+});
+
+test('a YAML parse error does not quote the file it failed on', () => {
+  const dir = tempDir();
+  writeFileSync(join(dir, 'analytics.yaml'), 'API_KEY: super: hunter2\n');
+  assert.throws(() => loadConfig(join(dir, 'analytics.yaml')), (error: Error) => {
+    assert.match(error.message, /YAML parse error/);
+    assert.doesNotMatch(error.message, /hunter2/);
+    return true;
+  });
 });

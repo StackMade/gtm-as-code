@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from './config/loader.js';
@@ -27,7 +27,8 @@ google:
 function loadWithExtends(pack: string) {
   const dir = mkdtempSync(join(tmpdir(), 'gtm-as-code-packs-'));
   const configPath = join(dir, 'analytics.yaml');
-  writeFileSync(configPath, `${HEADER}extends: ${join(PACKS_DIR, pack)}\n`);
+  copyFileSync(join(PACKS_DIR, pack), join(dir, pack));
+  writeFileSync(configPath, `${HEADER}extends: ${pack}\n`);
   const parsed = loadConfig(configPath);
   const interpolated = { ...parsed, data: interpolateConfig(parsed) };
   const config = validateConfig(interpolated);

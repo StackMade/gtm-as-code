@@ -1,5 +1,5 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { readFileSync, existsSync, realpathSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseYaml, MERGEABLE_MAP_PATHS, type ParsedConfig } from './parser.js';
 import { ConfigError } from './errors.js';
 
@@ -30,7 +30,22 @@ export function resolveConfigPath(configFlag?: string, cwd: string = process.cwd
 export function loadConfig(configFlag?: string, environment?: string, cwd: string = process.cwd()): ParsedConfig {
   const path = resolveConfigPath(configFlag, cwd);
   const source = readFileSync(path, 'utf8');
-  return applyEnvironment(resolveExtends(parseYaml(path, source), new Set([path])), environment);
+  return applyEnvironment(resolveExtends(parseYaml(path, source), new Set([path]), projectRoot(path, cwd)), environment);
+}
+
+function isInside(root: string, path: string): boolean {
+  const rel = relative(root, path);
+  return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+/** The directory `extends:` may not leave: the enclosing git checkout, else cwd, else the config's own directory. */
+function projectRoot(configPath: string, cwd: string): string {
+  const configDir = dirname(realpathSync(configPath));
+  for (let dir = configDir; dir !== dirname(dir); dir = dirname(dir)) {
+    if (existsSync(join(dir, '.git'))) return dir;
+  }
+  const realCwd = realpathSync(cwd);
+  return isInside(realCwd, configDir) ? realCwd : configDir;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -104,7 +119,7 @@ function mergeInclude(target: Record<string, unknown>, origins: Map<string, Pars
   }
 }
 
-function resolveExtends(parsed: ParsedConfig, visited: Set<string>): ParsedConfig {
+function resolveExtends(parsed: ParsedConfig, visited: Set<string>, root: string): ParsedConfig {
   const data = parsed.data;
   if (!isPlainObject(data) || data.extends === undefined) return parsed;
 
@@ -130,8 +145,17 @@ function resolveExtends(parsed: ParsedConfig, visited: Set<string>): ParsedConfi
       throw new ConfigError(parsed.file, undefined, 'extends', [{ label: 'Include not found', value: includePath }]);
     }
 
-    const includeSource = readFileSync(includePath, 'utf8');
-    const includeParsed = resolveExtends(parseYaml(includePath, includeSource), new Set([...visited, includePath]));
+    // A pull request controls this path, and can commit a symlink, so compare where it really lands.
+    const realIncludePath = realpathSync(includePath);
+    if (!isInside(root, realIncludePath)) {
+      throw new ConfigError(parsed.file, undefined, 'extends', [
+        { label: 'Include outside the project', value: rel },
+        { label: 'Allowed', value: `files under ${root}` },
+      ]);
+    }
+
+    const includeSource = readFileSync(realIncludePath, 'utf8');
+    const includeParsed = resolveExtends(parseYaml(includePath, includeSource), new Set([...visited, includePath]), root);
     mergeInclude(merged, origins, includeParsed);
   }
 

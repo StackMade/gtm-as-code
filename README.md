@@ -72,7 +72,9 @@ ga4:
 variables in your CI environment. Every command picks that file up on its own: `.env.analytics`
 first, then `analytics/.env.analytics`, both relative to the working directory, and `--dotenv <path>`
 points at a different one. A variable already set in the environment always wins over the file, so a
-CI `env:` block is never overridden by a stray checkout.
+CI `env:` block is never overridden by a stray checkout. The file can only set names the config may
+interpolate (`GTM_`, `GA4_`, `ANALYTICS_`, or listed in `GTM_CODE_ALLOW_ENV`). The CLI ignores
+other names with a warning, so `GOOGLE_APPLICATION_CREDENTIALS` has to come from the shell or the workflow.
 
 Check the config offline, no Google credentials required:
 
@@ -177,7 +179,8 @@ extends: ./packs/ecommerce.yaml
 ```
 
 Paths resolve relative to the file that contains the `extends:` key, and an extends target can
-itself extend further files. The root config always wins: an entry it defines directly can't be
+itself extend further files. A target has to sit inside the git checkout that holds the config
+(outside a checkout, inside the working directory), and validation rejects a symlink pointing out of it. The root config always wins: an entry it defines directly can't be
 overridden by an extends target, and two extends targets can't define the same entry either, both
 fail validation rather than picking one silently. An extends target may only contain the sections
 listed above, nothing that identifies or authenticates a specific GTM/GA4 property (`version`,

@@ -32,7 +32,8 @@ export function parseYaml(file: string, source: string): ParsedConfig {
   if (doc.errors.length > 0) {
     const error = doc.errors[0];
     const line = error.linePos?.[0]?.line;
-    throw new ConfigError(file, line, '', [{ label: 'YAML parse error', value: error.message }]);
+    // Only the first line: the rest quotes the source, and the file may not be a config at all.
+    throw new ConfigError(file, line, '', [{ label: 'YAML parse error', value: error.message.split('\n')[0].replace(/:$/, '') }]);
   }
   return { file, doc, lineCounter, data: doc.toJS() ?? {} };
 }
