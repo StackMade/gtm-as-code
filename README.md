@@ -1,5 +1,10 @@
 # gtm-as-code
 
+[![CI](https://github.com/StackMade/gtm-as-code/actions/workflows/ci.yml/badge.svg)](https://github.com/StackMade/gtm-as-code/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@stackmade/gtm-as-code)](https://www.npmjs.com/package/@stackmade/gtm-as-code)
+[![Node version](https://img.shields.io/node/v/@stackmade/gtm-as-code)](./package.json)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
 Google Tag Manager and GA4 configuration, managed as code. Declare your events, GTM resources, and
 GA4 resources in a YAML file, review the diff with `plan`, and apply it, Terraform-style.
 
@@ -9,8 +14,11 @@ GA4 resources in a YAML file, review the diff with `plan`, and apply it, Terrafo
 
 ## Status
 
-Early (`0.1.0`). `init`, `validate`, `plan`, and `apply` work and are verified against a real GTM
-container and GA4 property. See [ROADMAP.md](./ROADMAP.md) and the
+Pre-1.0 and published on npm. Every command in the [CLI reference](#cli-reference) works, and the
+GTM and GA4 payloads were verified against a real container and property. Trigger `filter`
+conditions are the exception: they were checked against the API's discovery document, not a live
+container. Breaking changes can land in any 0.x release, so read [CHANGELOG.md](./CHANGELOG.md)
+before upgrading. See [ROADMAP.md](./ROADMAP.md) and the
 [Roadmap section below](#roadmap--not-yet-implemented) for what isn't built yet. Check there before
 assuming a feature exists.
 
@@ -30,7 +38,9 @@ Scaffold a config in the current project:
 npx gtm-code init
 ```
 
-You'll be prompted for your GTM account ID, GTM container ID, and GA4 property ID. This creates:
+You'll be prompted for your GTM account ID, GTM container ID, and GA4 property ID. All three are
+numeric. The container ID is the number in the GTM URL, not the public `GTM-XXXXXXX` id. This
+creates:
 
 ```
 analytics/analytics.yaml
@@ -138,8 +148,9 @@ that means `gcloud auth application-default login`. In CI, either point
 Federation.
 
 You don't need to pick scopes yourself. `plan` requests read-only scopes (`tagmanager.readonly`,
-`analytics.readonly`) and `apply` requests edit scopes (`tagmanager.edit.containers`,
-`analytics.edit`).
+`analytics.readonly`), `apply` requests edit scopes (`tagmanager.edit.containers`,
+`analytics.edit`), and `publish` and `rollback` request `tagmanager.publish` and
+`tagmanager.edit.containerversions`.
 
 ## Configuration reference
 
@@ -296,12 +307,12 @@ project:
 
 google:
   gtm:
-    accountId: string
-    containerId: string
+    accountId: string          # digits only
+    containerId: string        # digits only, not the public GTM-XXXXXXX id
     workspace: string          # optional, workspace id or display name (e.g. "Default Workspace")
 
   ga4:
-    propertyId: string
+    propertyId: string         # digits only
     measurementId: string      # optional, derived from ga4.streamWebsiteUrl's web stream if unset
 
 environments:                  # optional, see Environments above; needs --env <name> once present
@@ -570,6 +581,10 @@ either; only web streams are touched, via `streamWebsiteUrl`.
 
 Validation also catches:
 - unknown top-level or nested keys (with a "did you mean" suggestion),
+- a config key named `__proto__`,
+- an account, container or property id that isn't all digits, since these go straight into Google
+  API URL paths,
+- a dependency cycle between variables, triggers and tags,
 - the same resource id defined twice across `gtm.*` and `ga4.*`,
 - a tag's `trigger` or `exceptTrigger` referencing a trigger name that doesn't exist,
 - a tag's `setupTags` or `teardownTags` referencing a tag name that doesn't exist, or itself,
@@ -643,8 +658,8 @@ detail `plan` does. Exit code `1` if drift is found (or on error), `0` if clean.
 ### `gtm-code apply [--auto-approve] [--allow-destroy] [--allow-destroy-protected]`
 
 Runs the same diff as `plan`, then executes it. Dependency cycles are rejected by `validate` and
-`plan` before any API calls, and by `apply` before any writes. Deletes go first (tags, then
-triggers, then variables, the reverse of creation order), then creates in dependency order so a
+`plan` before any API calls, and by `apply` before any writes. Deletes go first (environments, tags,
+triggers, variables, then folders, the reverse of creation order), then creates in dependency order so a
 tag can reference a trigger created in the same run, then updates. Prompts `Continue? [y/N]` unless `--auto-approve`
 is passed. With no terminal attached there is nothing to answer that prompt, so `apply` declines and
 says which flag it wanted rather than waiting: a scripted run passes `--auto-approve`, plus
@@ -756,7 +771,8 @@ independently — one failing check doesn't stop the rest. Exit code `1` if any 
 
 ## State
 
-`.analytics/state.json` is created and updated automatically by `plan` and `apply`. It tracks which
+`.analytics/state.json` is created and updated automatically by `apply` and `adopt`; `plan` only
+reads it. It tracks which
 GA4 resources this tool owns, plus which of them are `protected: true` (its `protectedResources`
 field). GTM ownership, and its own `protected` flag, are tracked differently, via a `notes` field
 this tool writes onto each GTM object it manages. Resources not tracked as managed are never
@@ -796,10 +812,11 @@ change for this package.
 `hasChanges` also includes pending GA4 settings and built-in variable changes, reported in
 `ga4Settings` and `builtInVariablesToEnable`. `counts` counts resource operations only.
 
-`operation` is `"create"`, `"update"`, or `"delete"`. `type` is the resource type as it appears in
-`plan`'s text output (`gtm.variable`, `gtm.trigger`, `gtm.tag`, `ga4.dimension`, `ga4.metric`,
-`ga4.keyEvent`). `id` is the logical id from your config, the same one that appears as a YAML key
-under `events:`, `gtm:`, or `ga4:`.
+`operation` is `"create"`, `"update"`, or `"delete"`. `type` is the provider-prefixed resource kind
+(`gtm.folder`, `gtm.environment`, `gtm.variable`, `gtm.trigger`, `gtm.tag`, `ga4.dimension`,
+`ga4.metric`, `ga4.keyEvent`, `ga4.audience`, `ga4.eventCreateRule`, `ga4.eventEditRule`,
+`ga4.calculatedMetric`, `ga4.channelGroup`, `ga4.measurementProtocolSecret`). `id` is the logical id
+from your config, the same one that appears as a YAML key under `events:`, `gtm:`, or `ga4:`.
 
 `--format markdown` prints a one-line counts summary and a table with the same three columns,
 formatted so a caller can post it as a PR comment as-is:
@@ -890,7 +907,9 @@ GA4 ownership tracking works in CI as long as `.analytics/state.json` is committ
 
 Not available yet. These are known gaps, so please don't file a bug for them:
 
-- `gtm-code migrate`
+- `gtm-code migrate`, and rename support (a rename is currently a delete and a create)
+- Scroll depth, element visibility, video and AMP built-in variables
+- The `urlMatches` trigger filter operator
 - GTM custom templates; conversion linker and community-gallery template tags (their payloads need
   fields, like Floodlight ids or a gallery template's own parameter schema, this tool can't
   live-verify against a sandbox container). See [Schema](#schema) for what is covered

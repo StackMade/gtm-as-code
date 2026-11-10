@@ -6,6 +6,9 @@ Milestones are ordered by dependency, not by appeal. Correctness gates come befo
 that can express every GTM trigger type but can't safely re-run in CI is worse than one that covers
 three trigger types and never destroys anything it shouldn't.
 
+Milestone numbers are planning labels and don't track npm versions, which come from Changesets. See
+[CHANGELOG.md](./CHANGELOG.md) for what each release contains.
+
 ## Done (0.1)
 
 The core loop: declare config, preview, apply.
@@ -26,23 +29,24 @@ Published to npm as `@stackmade/gtm-as-code`, with a companion GitHub Action at
 Three facts shape everything below, and they are worth stating once instead of repeating in every
 milestone.
 
-Ownership is not one mechanism. GTM ownership is stamped into each object's `notes` field. GA4 has
-no equivalent metadata field, so it falls back to `.analytics/state.json`. Every new entity type
-needs an ownership answer before it can be managed, and they fall into three categories:
+Ownership is not one mechanism. GTM ownership is stamped into each object's `notes` field, or its
+`description` for a GTM environment, which has no `notes`. GA4 has no equivalent metadata field, so
+it falls back to `.analytics/state.json`. Every new entity type needs an ownership answer before it
+can be managed, and they fall into three categories:
 
 | Category | Mechanism | Examples |
 |---|---|---|
-| Notes-stamped | `notes` field on the object | tags, triggers, variables, folders |
+| Stamped on the object | `notes` or `description` field | tags, triggers, variables, folders, GTM environments |
 | State-tracked | `.analytics/state.json` | all GA4 resources |
-| Toggle-only | no ownership needed, the resource is a boolean rather than a thing we create | GTM built-in variables, enhanced measurement settings |
+| Toggle-only | no ownership needed, the resource is a setting rather than a thing we create | GTM built-in variables, GA4 property settings, enhanced measurement settings |
 
 The notes mechanism has a known limitation: `notes` is editable in the GTM UI, so a human can break
 ownership by clearing it. There is no API-level alternative. The mitigation is drift detection
 (0.3), not a different mechanism.
 
-Write quota is a real ceiling. The GTM API rate-limits writes per container. Every breadth milestone
-that adds entity types also adds `apply` round trips, so batching, backoff, and retry belong inside
-those milestones rather than in a separate performance one.
+API quota is a real ceiling. The GTM API allows 30 queries per minute per user, and every entity
+type adds `apply` round trips. `apply` has no batching, backoff or retry: it fails fast on
+`RESOURCE_EXHAUSTED`, and the fix is to wait out the minute.
 
 The config is a tracking plan, not just an API wrapper. The `events:` block compiles down to GTM and
 GA4 resources today. Everything in 0.6 exists because that block is also the only machine-readable
@@ -66,9 +70,8 @@ tool could be wrong.
 - `plan --format json` and `plan --format markdown`, and a three-way exit code (`0` no changes,
   `2` changes pending, `1` error) so CI can branch without parsing output
 
-Not yet published to npm; the package is still at `0.1.1`. See README's [Output
-contract](./README.md#output-contract) for the stable JSON shape and exit codes this milestone
-adds.
+See README's [Output contract](./README.md#output-contract) for the stable JSON shape and exit
+codes this milestone adds.
 
 ### The GitHub Action
 
@@ -137,8 +140,7 @@ Until this shipped the tool only served greenfield containers, which is almost n
   with no flags imports everything to bootstrap a config, `--resource <kind>:<id>` imports one
   named resource into an existing config. Deliberately read-only, so it can't write the ownership
   metadata `plan`/`apply` need on its own — `gtm-code adopt <kind>:<id>` is the separate write step
-  that closes that gap. See [[2026-08-28-gtm-code-pull-and-export-ingest]] and
-  [[2026-08-28-gtm-code-adopt]].
+  that closes that gap.
 - GTM container export ingest, as `pull --from-export <path>`. Reads a GTM UI container export
   (Admin -> Export Container) instead of calling the API — faster, permission-free, GTM only (no
   GA4 equivalent exists).
@@ -149,15 +151,15 @@ Until this shipped the tool only served greenfield containers, which is almost n
   network access.
 
 Also shipped alongside 0.3, requested by the first real adopter (PoliczProsto.pl) and blocking its
-migration: `googleTag` configuration parameters and firing triggers (task_034, task_035). Not done:
-built-in-trigger reserved names (the other half of task_035) — no documented API mechanism to
-resolve them and no sandbox available to verify one, see
-[[2026-08-28-builtin-trigger-resolution-deferred]].
+migration: `googleTag` configuration parameters and firing triggers. Built-in trigger names followed
+in 0.4.
 
-## 0.4: GTM coverage
+## Done (0.4): GTM coverage
 
-Today's coverage is one variable type, one trigger type, two tag types. Most real containers cannot
-be expressed at all. Ordered within the milestone by how many containers each unlocks.
+Before this milestone the tool covered one variable type, one trigger type and two tag types, so
+most real containers could not be expressed at all. Items were ordered by how many containers each
+unlocks. Three stay open and are marked below: the remaining built-in variables, conversion linker
+and gallery tags, and custom templates.
 
 - Built-in variables — **done**. The click/page/form/error/history/debug set (`gtm.builtInVariables`
   in config), enable-only through `plan`/`apply`/`drift`, no ownership tracking — see the
@@ -169,9 +171,8 @@ be expressed at all. Ordered within the milestone by how many containers each un
   `click`, `linkClick`, `formSubmission`, `scrollDepth`, `historyChange`, `jsError`) need only their
   GTM `type` string; `elementVisibility`, `timer`, and `triggerGroup` carry fields of their own.
 - Trigger exceptions — **done**. `exceptTrigger` on a tag maps to GTM's `blockingTriggerId`,
-  alongside the existing `trigger`/`firingTriggerId`. Works for every tag type this tool already
-  supports (`ga4Event`, `googleTag`); nothing new to add once a new tag type lands, since both
-  fields resolve through the same generic trigger-id helper.
+  alongside the existing `trigger`/`firingTriggerId`. Works for every tag type this tool supports,
+  since both fields resolve through the same generic trigger-id helper.
 - Variable types — **done**. Constant, custom JavaScript, lookup table, regex table, URL, cookie,
   DOM element, JavaScript variable, auto-event variables, Google tag settings.
 - Tag types — **partly done**. Custom HTML and custom image are covered. Conversion linker and
@@ -191,8 +192,7 @@ be expressed at all. Ordered within the milestone by how many containers each un
 - Built-in trigger references. **Done.** A tag's `trigger`/`exceptTrigger` can reference GTM's
   built-in triggers ("All Pages", "Initialization - All Pages") by name, resolved to their fixed
   numeric ids (`src/providers/google/gtm/builtin-triggers.ts`) rather than looked up in
-  `gtm.triggers`, since GTM never returns these from `triggers.list`. This was task_035's other
-  half, deferred since 2026-08-28 for lack of a verified resolution mechanism; live-verified
+  `gtm.triggers`, since GTM never returns these from `triggers.list`. Live-verified
   2026-08-29 (`triggers.get` 404s for both known ids regardless, but a tag created with
   `firingTriggerId` set to either succeeds and reads back correctly). "Consent Initialization - All
   Pages" is a known third built-in trigger whose numeric id couldn't be confirmed through the API
@@ -207,7 +207,7 @@ be expressed at all. Ordered within the milestone by how many containers each un
   reproducible from a `.tpl` file's declared fields alone; needs either a real UI-exported example
   tag payload to compare against, or GTM support docs this session didn't have access to.
 
-## 0.5: Consent Mode v2 and governance
+## Done (0.5): Consent Mode v2 and governance
 
 The highest-value config-shaped feature that isn't coverage. Consent settings are legally required
 in the EEA, tedious and error-prone to set per tag in the UI, and reviewed by people who would
@@ -235,7 +235,7 @@ rather read a diff than click through 40 tags.
   so their flag lives in `.analytics/state.json`'s `protectedResources` list instead. Either way,
   deleting a protected resource needs `--allow-destroy-protected` in addition to `--allow-destroy`.
 
-## 0.6: the tracking plan as a product
+## Done (0.6): the tracking plan as a product
 
 Everything here reads the config and produces something other than an API call. Cheap to build
 relative to its value, because the data is already there.
@@ -274,9 +274,9 @@ relative to its value, because the data is already there.
   for GA4's ecommerce item array (`generate` emits a shared `Item` interface), and narrowed the
   reserved-parameter-name check so `currency` is only blocked when marked `dimension: true`, since
   it's reserved for custom dimension/metric creation, not for GA4's own recommended events that
-  require it as a standard parameter. See [[2026-08-29-event-packs]].
+  require it as a standard parameter.
 
-## 0.7: GA4 coverage
+## Done (0.7): GA4 coverage
 
 The Admin API surface well beyond custom dimensions. Each item is state-tracked ownership, so 0.2's
 GA4 hardening is a hard prerequisite for all of it.
@@ -423,11 +423,31 @@ Also worth knowing before a large container: the GTM API allows **30 queries per
 plus `apply` cycle over a container with many resources can reach it; the fix is to wait out the
 minute, not to retry immediately.
 
-## Deferred out of 0.9: access as code
+## Done since 0.9: correctness and security
 
-GTM user permissions and GA4 access bindings. Useful, and also the point at which a mistake in this
-tool becomes a security incident rather than a wrong tag, so it gets its own milestone and its own
-guards rather than riding along with environments.
+These shipped as npm releases 0.9.1 to 0.11.2, outside any numbered milestone. The security items
+share one threat model: a pull request changes files that a workflow then feeds to `gtm-code`.
+
+- Preflight and output fixes (0.9.1). Dependency cycles fail `validate` and `plan` before any API
+  call, and `apply` before any write. `plan` and `drift` count settings-only and built-in-variable
+  changes, and offline `diff` reports setting declarations.
+- Numeric ids (0.9.2). `google.gtm.accountId`, `google.gtm.containerId` and `google.ga4.propertyId`
+  must be digits, because they go straight into API URL paths.
+- Trigger filter conditions (0.10.0). `filter` on a trigger maps to the conditions GTM's editor
+  calls "Some Clicks" or "Some Page Views", and `pull` and `drift` read it back. The mapping was
+  checked against the Tag Manager API discovery document but has not been run against a live
+  container yet. The `urlMatches` operator isn't supported.
+- Interpolation allowlist (0.11.0). `${VAR}` resolves only `GTM_`, `GA4_` and `ANALYTICS_` names,
+  plus names listed in `GTM_CODE_ALLOW_ENV`.
+- Config boundaries (0.11.1, with clearer errors in 0.11.2). An env file can only set names the
+  config may interpolate, `extends:` stays inside the git checkout, YAML parse errors no longer
+  quote the source, and a `__proto__` key is rejected.
+
+## Next: access as code
+
+GTM user permissions and GA4 access bindings, moved out of 0.9 and not started. A mistake here
+becomes a security incident rather than a wrong tag, so this gets its own milestone and its own
+guards.
 
 ## 1.0
 
