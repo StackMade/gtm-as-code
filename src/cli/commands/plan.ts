@@ -30,7 +30,7 @@ const GA4_KINDS: Ga4Kind[] = [
   'measurementProtocolSecret',
 ];
 /** Stream-scoped GA4 kinds need a resolved data stream `name` passed to `listManaged`. */
-const GA4_STREAM_SCOPED_KINDS: ReadonlySet<Ga4Kind> = new Set(['eventCreateRule', 'eventEditRule', 'measurementProtocolSecret']);
+export const GA4_STREAM_SCOPED_KINDS: ReadonlySet<Ga4Kind> = new Set(['eventCreateRule', 'eventEditRule', 'measurementProtocolSecret']);
 
 const KIND_LABEL: Record<string, string> = {
   'gtm.folder': 'folder',

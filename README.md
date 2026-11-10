@@ -727,10 +727,12 @@ item fields) that's only emitted when at least one event uses it. Prints to stdo
 Stamps ownership on a resource `pull` already brought into the config, so `plan`/`apply` start
 treating it as managed. It's the one write in an otherwise read-only pull/adopt flow. Takes the same
 `<kind>:<id>` argument as `pull --resource` (e.g. `tag:generate_lead_tag`). For GTM kinds
-(`folder`/`variable`/`trigger`/`tag`) it re-submits the matching live object with an ownership marker
-in its `notes` field, with no functional change to the object itself. For GA4 kinds
-(`dimension`/`metric`/`keyEvent`) it records the resource as managed in `.analytics/state.json`
-instead, with no live write. Prompts `Continue? [y/N]` before writing either way, and there is no
+(`folder`/`variable`/`trigger`/`tag`/`environment`) it re-submits the matching live object with an
+ownership marker in its `notes` field (`description` for an environment), with no functional change
+to the object itself. For GA4 kinds it records the resource as managed in `.analytics/state.json`
+instead, with no live write. The stream-scoped GA4 kinds (`eventCreateRule`, `eventEditRule`,
+`measurementProtocolSecret`) need `ga4.streamWebsiteUrl` in the config, because `adopt` looks them
+up on the same stream `plan` reads. Prompts `Continue? [y/N]` before writing either way, and there is no
 flag to skip that: with no terminal attached, `adopt` says so and stops.
 
 ### `gtm-code verify [--days <n>] [--format json|markdown]`
